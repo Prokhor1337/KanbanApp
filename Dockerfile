@@ -2,10 +2,10 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
-# Install Blazor WebAssembly workload (required for WASM publish)
+# Install Blazor WebAssembly workload BEFORE restore (required for WASM)
 RUN dotnet workload install wasm-tools
 
-# Copy solution and restore dependencies first (better Docker layer caching)
+# Copy solution and project files for restore
 COPY KanbanApp.sln .
 COPY src/KanbanApp.Domain/KanbanApp.Domain.csproj              src/KanbanApp.Domain/
 COPY src/KanbanApp.Application/KanbanApp.Application.csproj    src/KanbanApp.Application/
@@ -15,10 +15,12 @@ COPY src/KanbanApp.Web/KanbanApp.Web.Client/KanbanApp.Web.Client.csproj src/Kanb
 
 RUN dotnet restore
 
-# Copy all source and publish
+# Copy all source
 COPY . .
+
+# Publish (without --no-restore so wasm tools can do their thing)
 RUN dotnet publish src/KanbanApp.Web/KanbanApp.Web/KanbanApp.Web.csproj \
-    -c Release -o /out --no-restore
+    -c Release -o /out
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
