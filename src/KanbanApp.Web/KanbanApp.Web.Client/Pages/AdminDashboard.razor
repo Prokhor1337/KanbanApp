@@ -1,87 +1,94 @@
 @page "/admin"
 @rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
 @using KanbanApp.Application.DTOs
-@using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Components.Authorization
 @using System.Globalization
 @inject KanbanApp.Web.Client.Services.KanbanApiService ApiService
 @inject KanbanApp.Web.Client.Services.ToastService Toast
+@inject AuthenticationStateProvider AuthStateProvider
 
 <PageTitle>Admin Dashboard — Kanban Pro</PageTitle>
 
-<AuthorizeView Roles="Admin">
-    <Authorized>
-        <div class="admin-page">
-            <div class="admin-header">
-                <div>
-                    <h2 class="admin-title">🛡 Admin Dashboard</h2>
-                    <p class="admin-subtitle">Manage all boards across the system</p>
-                </div>
-                <div class="admin-stats">
-                    <span class="stat-badge">📋 @(allBoards?.Count ?? 0) total boards</span>
-                </div>
+@if (!_authLoaded)
+{
+    <div class="admin-loading" style="padding:60px 28px;">
+        <div class="spinner"></div>
+        <span>Checking access...</span>
+    </div>
+}
+else if (!_isAdmin)
+{
+    <div class="access-denied">
+        <div class="access-denied-icon">🔒</div>
+        <h3>Access Denied</h3>
+        <p>You must be an administrator to view this page.</p>
+        <a href="/" class="btn-home">← Go Home</a>
+    </div>
+}
+else
+{
+    <div class="admin-page">
+        <div class="admin-header">
+            <div>
+                <h2 class="admin-title">🛡 Admin Dashboard</h2>
+                <p class="admin-subtitle">Manage all boards across the system</p>
             </div>
+            <div class="admin-stats">
+                <span class="stat-badge">📋 @(allBoards?.Count ?? 0) total boards</span>
+            </div>
+        </div>
 
-            @if (isLoading)
-            {
-                <div class="admin-loading">
-                    <div class="spinner"></div>
-                    <span>Loading boards...</span>
-                </div>
-            }
-            else if (allBoards == null || !allBoards.Any())
-            {
-                <div class="admin-empty">No boards found in the system.</div>
-            }
-            else
-            {
-                <div class="table-wrapper">
-                    <table class="admin-table">
-                        <thead>
+        @if (isLoading)
+        {
+            <div class="admin-loading">
+                <div class="spinner"></div>
+                <span>Loading boards...</span>
+            </div>
+        }
+        else if (allBoards == null || !allBoards.Any())
+        {
+            <div class="admin-empty">No boards found in the system.</div>
+        }
+        else
+        {
+            <div class="table-wrapper">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>Board Title</th>
+                            <th>Description</th>
+                            <th>Owner</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var board in allBoards)
+                        {
                             <tr>
-                                <th>Board Title</th>
-                                <th>Description</th>
-                                <th>Owner</th>
-                                <th>Created</th>
-                                <th>Actions</th>
+                                <td class="td-title">@board.Title</td>
+                                <td class="td-desc">
+                                    @(string.IsNullOrEmpty(board.Description) ? "—" : board.Description)
+                                </td>
+                                <td class="td-owner">@board.OwnerId</td>
+                                <td class="td-date">
+                                    @board.CreatedAt.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
+                                </td>
+                                <td class="td-actions">
+                                    <a href="/board/@board.Id" class="btn-view">View</a>
+                                    <button class="btn-admin-delete" title="Delete board"
+                                            @onclick="() => AskDelete(board)">
+                                        🗑 Delete
+                                    </button>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            @foreach (var board in allBoards)
-                            {
-                                <tr>
-                                    <td class="td-title">@board.Title</td>
-                                    <td class="td-desc">
-                                        @(string.IsNullOrEmpty(board.Description) ? "—" : board.Description)
-                                    </td>
-                                    <td class="td-owner">@board.OwnerId</td>
-                                    <td class="td-date">
-                                        @board.CreatedAt.ToString("dd MMM yyyy", CultureInfo.InvariantCulture)
-                                    </td>
-                                    <td class="td-actions">
-                                        <a href="/board/@board.Id" class="btn-view">View</a>
-                                        <button class="btn-admin-delete" title="Delete board"
-                                                @onclick="() => AskDelete(board)">
-                                            🗑 Delete
-                                        </button>
-                                    </td>
-                                </tr>
-                            }
-                        </tbody>
-                    </table>
-                </div>
-            }
-        </div>
-    </Authorized>
-    <NotAuthorized>
-        <div class="access-denied">
-            <div class="access-denied-icon">🔒</div>
-            <h3>Access Denied</h3>
-            <p>You must be an administrator to view this page.</p>
-            <a href="/" class="btn-home">← Go Home</a>
-        </div>
-    </NotAuthorized>
-</AuthorizeView>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
 
 @* Delete Confirmation Modal *@
 @if (boardToDelete != null)
@@ -363,22 +370,36 @@
     private BoardDto? boardToDelete;
     private bool isDeleting = false;
 
+    private bool _isAdmin = false;
+    private bool _authLoaded = false;
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
         try
         {
-            allBoards = await ApiService.GetAllBoardsAsync();
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            _isAdmin = authState.User.IsInRole("Admin");
         }
-        catch (Exception ex)
+        catch { }
+
+        _authLoaded = true;
+
+        if (_isAdmin)
         {
-            Toast.ShowError($"Failed to load boards: {ex.Message}");
+            try
+            {
+                allBoards = await ApiService.GetAllBoardsAsync();
+            }
+            catch (Exception ex)
+            {
+                Toast.ShowError($"Failed to load boards: {ex.Message}");
+            }
         }
-        finally
-        {
-            isLoading = false;
-            StateHasChanged();
-        }
+
+        isLoading = false;
+        StateHasChanged();
     }
 
     private void AskDelete(BoardDto board) => boardToDelete = board;
