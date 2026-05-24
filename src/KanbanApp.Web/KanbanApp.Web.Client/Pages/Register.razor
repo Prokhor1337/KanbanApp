@@ -1,0 +1,139 @@
+@page "/register"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using KanbanApp.Web.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager Nav
+@inject KanbanApiService ApiService
+
+<PageTitle>Register</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm border-0" style="border-radius: 12px;">
+                <div class="card-body p-4">
+                    <h3 class="text-center mb-4" style="font-weight: 600;">Register</h3>
+
+                    @if (showError)
+                    {
+                        <div class="alert alert-danger" style="border-radius: 8px;">@serverError</div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Email</label>
+                        <input type="email" class="form-control @(emailError != null ? "is-invalid" : "")"
+                               @bind="email" @oninput="ClearErrors" placeholder="name@example.com" />
+                        @if (emailError != null)
+                        {
+                            <div class="invalid-feedback">@emailError</div>
+                        }
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted">Password</label>
+                        <input type="password" class="form-control @(passwordError != null ? "is-invalid" : "")"
+                               @bind="password" @oninput="ClearErrors" placeholder="••••••••" />
+                        @if (passwordError != null)
+                        {
+                            <div class="invalid-feedback">@passwordError</div>
+                        }
+                        else
+                        {
+                            <div class="form-text" style="font-size: 12px;">Min 6 chars, uppercase, digit and special char required.</div>
+                        }
+                    </div>
+                    <button class="btn btn-primary w-100 mb-3" style="border-radius: 8px; font-weight: 500;" @onclick="HandleRegister" disabled="@isLoading">
+                        @(isLoading ? "Registering..." : "Create Account")
+                    </button>
+                    <div class="text-center">
+                        <span class="text-muted">Already have an account? </span>
+                        <a href="/login" class="text-decoration-none" style="font-weight: 500;">Log in here</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private bool showError = false;
+    private bool isLoading = false;
+    private string serverError = "Registration failed. Please check your details.";
+
+    private string? emailError;
+    private string? passwordError;
+
+    private void ClearErrors()
+    {
+        emailError = null;
+        passwordError = null;
+        showError = false;
+    }
+
+    private bool ValidateInputs()
+    {
+        var valid = true;
+
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || !email.Contains('.'))
+        {
+            emailError = "Please enter a valid email address.";
+            valid = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 6)
+        {
+            passwordError = "Password must be at least 6 characters.";
+            valid = false;
+        }
+        else if (!password.Any(char.IsUpper))
+        {
+            passwordError = "Password must contain at least one uppercase letter.";
+            valid = false;
+        }
+        else if (!password.Any(char.IsDigit))
+        {
+            passwordError = "Password must contain at least one digit.";
+            valid = false;
+        }
+        else if (!password.Any(c => !char.IsLetterOrDigit(c)))
+        {
+            passwordError = "Password must contain at least one special character (!@#$...).";
+            valid = false;
+        }
+
+        return valid;
+    }
+
+    private async Task HandleRegister()
+    {
+        // Run frontend validation first — skip API call if invalid
+        if (!ValidateInputs()) return;
+
+        showError = false;
+        isLoading = true;
+
+        var success = await AuthService.RegisterAsync(email, password);
+
+        if (success)
+        {
+            // Auto-login after successful registration
+            var loginSuccess = await AuthService.LoginAsync(email, password);
+            if (loginSuccess)
+            {
+                await ApiService.AssignDeveloperRoleAsync();
+                Nav.NavigateTo("/boards");
+            }
+            else
+            {
+                Nav.NavigateTo("/login");
+            }
+        }
+        else
+        {
+            showError = true;
+        }
+
+        isLoading = false;
+    }
+}

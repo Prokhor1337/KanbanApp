@@ -1,0 +1,22 @@
+@page "/logout"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using KanbanApp.Web.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<PageTitle>Logout</PageTitle>
+
+<div class="container mt-5 text-center">
+    <p>Logging out securely...</p>
+</div>
+
+@code {
+    // Trigger the logout process as soon as the page initializes
+    protected override async Task OnInitializedAsync()
+    {
+        await AuthService.LogoutAsync();
+        
+        // Force a full page reload to clear all states and return to home
+        Nav.NavigateTo("/", forceLoad: true);
+    }
+}

@@ -1,0 +1,390 @@
+@page "/profile"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using KanbanApp.Web.Client.Services
+@inject KanbanApiService ApiService
+@inject NavigationManager Nav
+
+<PageTitle>My Profile — Kanban Pro</PageTitle>
+
+<div class="profile-page">
+
+    @if (profile == null && !_loaded)
+    {
+        <div class="profile-loading">
+            <div class="spinner"></div>
+            <span>Loading profile...</span>
+        </div>
+    }
+    else
+    {
+        <!-- Header -->
+        <div class="profile-header">
+            <div class="profile-avatar-lg">@AvatarLetter</div>
+            <div class="profile-header-info">
+                <h2 class="profile-name">@(profile?.DisplayName is { Length: > 0 } dn ? dn : profile?.Email ?? "User")</h2>
+                <p class="profile-email">@profile?.Email</p>
+                <span class="profile-role-badge">Member</span>
+            </div>
+        </div>
+
+        <div class="profile-grid">
+
+            <!-- Display Name -->
+            <div class="profile-card">
+                <h4 class="card-title">✏️ Display Name</h4>
+                <p class="card-desc">This name is shown to your teammates.</p>
+
+                <div class="form-group">
+                    <input class="field-input" @bind="displayNameInput"
+                           placeholder="Your display name" maxlength="50" />
+                </div>
+
+                @if (nameError != null)
+                {
+                    <div class="alert-error">@nameError</div>
+                }
+                @if (nameSuccess)
+                {
+                    <div class="alert-success">✓ Display name updated!</div>
+                }
+
+                <div class="card-actions">
+                    <button class="btn-save" @onclick="SaveDisplayName"
+                            disabled="@(isSavingName || string.IsNullOrWhiteSpace(displayNameInput))">
+                        @(isSavingName ? "Saving..." : "Save Name")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Change Password -->
+            <div class="profile-card">
+                <h4 class="card-title">🔑 Change Password</h4>
+                <p class="card-desc">Use a strong password with at least 6 characters.</p>
+
+                <div class="form-group">
+                    <label class="field-label">Current password</label>
+                    <input class="field-input" type="password" @bind="currentPassword"
+                           placeholder="Current password" />
+                </div>
+                <div class="form-group">
+                    <label class="field-label">New password</label>
+                    <input class="field-input" type="password" @bind="newPassword"
+                           placeholder="New password" />
+                </div>
+                <div class="form-group">
+                    <label class="field-label">Confirm new password</label>
+                    <input class="field-input" type="password" @bind="confirmPassword"
+                           placeholder="Confirm new password" />
+                </div>
+
+                @if (pwdError != null)
+                {
+                    <div class="alert-error">@pwdError</div>
+                }
+                @if (pwdSuccess)
+                {
+                    <div class="alert-success">✓ Password changed successfully!</div>
+                }
+
+                <div class="card-actions">
+                    <button class="btn-save" @onclick="SavePassword"
+                            disabled="@(isSavingPwd || string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))">
+                        @(isSavingPwd ? "Changing..." : "Change Password")
+                    </button>
+                </div>
+            </div>
+
+            <!-- Account Info -->
+            <div class="profile-card info-card">
+                <h4 class="card-title">📋 Account Info</h4>
+                <div class="info-row">
+                    <span class="info-label">Email</span>
+                    <span class="info-value">@profile?.Email</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">User ID</span>
+                    <span class="info-value info-mono">@(profile?.Id.Length > 8 ? profile.Id[..8] + "..." : profile?.Id)</span>
+                </div>
+                <div class="info-row">
+                    <span class="info-label">Display Name</span>
+                    <span class="info-value">@(profile?.DisplayName is { Length: > 0 } d ? d : "Not set")</span>
+                </div>
+            </div>
+
+        </div>
+    }
+</div>
+
+<style>
+    /* ── Page ──────────────────────────────────────────────────── */
+    .profile-page {
+        padding: 28px;
+        max-width: 860px;
+        margin: 0 auto;
+    }
+
+    .profile-loading {
+        display: flex; align-items: center; gap: 12px;
+        justify-content: center; height: 60vh;
+        color: #6b778c;
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .profile-header {
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid #e8ecf0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        margin-bottom: 24px;
+    }
+
+    .profile-avatar-lg {
+        width: 72px; height: 72px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #0052cc, #6554c0);
+        color: white; font-size: 32px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        text-transform: uppercase; flex-shrink: 0;
+        box-shadow: 0 4px 16px rgba(0, 82, 204, 0.3);
+    }
+
+    .profile-header-info { flex: 1; }
+
+    .profile-name {
+        font-size: 22px; font-weight: 700;
+        color: #172b4d; margin: 0 0 4px;
+    }
+
+    .profile-email {
+        color: #6b778c; font-size: 14px; margin: 0 0 10px;
+    }
+
+    .profile-role-badge {
+        display: inline-block;
+        background: #e3fcef; color: #00875a;
+        font-size: 12px; font-weight: 600;
+        padding: 3px 10px; border-radius: 20px;
+    }
+
+    /* ── Grid ──────────────────────────────────────────────────── */
+    .profile-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    .info-card {
+        grid-column: 1 / -1;
+    }
+
+    /* ── Card ──────────────────────────────────────────────────── */
+    .profile-card {
+        background: white;
+        border-radius: 14px;
+        padding: 24px;
+        border: 1px solid #e8ecf0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    .card-title {
+        font-size: 16px; font-weight: 700;
+        color: #172b4d; margin: 0 0 6px;
+    }
+
+    .card-desc {
+        font-size: 13px; color: #6b778c;
+        margin: 0 0 18px;
+    }
+
+    /* ── Form ──────────────────────────────────────────────────── */
+    .form-group { margin-bottom: 12px; }
+
+    .field-label {
+        display: block; font-size: 12px; font-weight: 600;
+        color: #5e6c84; margin-bottom: 5px; text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .field-input {
+        width: 100%; border: 2px solid #dfe1e6;
+        border-radius: 8px; padding: 10px 12px;
+        font-size: 14px; outline: none;
+        transition: border-color 0.2s; box-sizing: border-box;
+        color: #172b4d;
+    }
+
+    .field-input:focus { border-color: #0052cc; }
+
+    .card-actions { margin-top: 16px; }
+
+    .btn-save {
+        background: linear-gradient(135deg, #0052cc, #0065ff);
+        color: white; border: none;
+        padding: 10px 22px; border-radius: 8px;
+        font-weight: 600; font-size: 14px;
+        cursor: pointer; transition: opacity 0.2s;
+    }
+
+    .btn-save:hover:not(:disabled) { opacity: 0.88; }
+    .btn-save:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* ── Alerts ────────────────────────────────────────────────── */
+    .alert-error {
+        background: #ffebe6; color: #de350b;
+        border-radius: 8px; padding: 10px 14px;
+        font-size: 13px; margin-top: 10px;
+    }
+
+    .alert-success {
+        background: #e3fcef; color: #00875a;
+        border-radius: 8px; padding: 10px 14px;
+        font-size: 13px; margin-top: 10px;
+        font-weight: 600;
+    }
+
+    /* ── Info Card ─────────────────────────────────────────────── */
+    .info-row {
+        display: flex; justify-content: space-between;
+        align-items: center; padding: 10px 0;
+        border-bottom: 1px solid #f4f5f7;
+    }
+
+    .info-row:last-child { border-bottom: none; }
+
+    .info-label {
+        font-size: 13px; color: #6b778c; font-weight: 500;
+    }
+
+    .info-value {
+        font-size: 14px; color: #172b4d; font-weight: 600;
+    }
+
+    .info-mono {
+        font-family: monospace; font-size: 12px; color: #97a0af;
+    }
+
+    /* ── Spinner ───────────────────────────────────────────────── */
+    .spinner {
+        width: 24px; height: 24px;
+        border: 3px solid #e8ecf0; border-top-color: #0052cc;
+        border-radius: 50%; animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ────────────────────────────────────────────── */
+    @@media (max-width: 640px) {
+        .profile-page { padding: 16px; }
+        .profile-header { flex-direction: column; text-align: center; }
+        .profile-avatar-lg { width: 60px; height: 60px; font-size: 26px; }
+        .profile-name { font-size: 18px; }
+        .profile-grid { grid-template-columns: 1fr; }
+        .info-card { grid-column: 1; }
+    }
+</style>
+
+@code {
+    private KanbanApiService.UserProfileDto? profile;
+    private bool _loaded = false;
+
+    // Display Name
+    private string displayNameInput = string.Empty;
+    private bool isSavingName = false;
+    private string? nameError;
+    private bool nameSuccess = false;
+
+    // Password
+    private string currentPassword = string.Empty;
+    private string newPassword = string.Empty;
+    private string confirmPassword = string.Empty;
+    private bool isSavingPwd = false;
+    private string? pwdError;
+    private bool pwdSuccess = false;
+
+    private string AvatarLetter =>
+        profile?.DisplayName is { Length: > 0 } dn ? dn[0].ToString().ToUpper()
+        : profile?.Email is { Length: > 0 } em   ? em[0].ToString().ToUpper()
+        : "U";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loaded) return;
+        _loaded = true;
+
+        profile = await ApiService.GetProfileAsync();
+        if (profile != null)
+            displayNameInput = profile.DisplayName ?? string.Empty;
+
+        StateHasChanged();
+    }
+
+    // ── Display Name ──────────────────────────────────────────────
+    private async Task SaveDisplayName()
+    {
+        if (string.IsNullOrWhiteSpace(displayNameInput)) return;
+
+        isSavingName = true;
+        nameError = null;
+        nameSuccess = false;
+
+        var (ok, error) = await ApiService.UpdateProfileAsync(displayNameInput.Trim());
+        if (ok)
+        {
+            nameSuccess = true;
+            // Refresh local profile
+            profile = await ApiService.GetProfileAsync();
+        }
+        else
+        {
+            nameError = error;
+        }
+
+        isSavingName = false;
+    }
+
+    // ── Password ──────────────────────────────────────────────────
+    private async Task SavePassword()
+    {
+        pwdError = null;
+        pwdSuccess = false;
+
+        if (string.IsNullOrWhiteSpace(currentPassword) || string.IsNullOrWhiteSpace(newPassword))
+        {
+            pwdError = "Please fill in all password fields.";
+            return;
+        }
+
+        if (newPassword != confirmPassword)
+        {
+            pwdError = "New passwords do not match.";
+            return;
+        }
+
+        if (newPassword.Length < 6)
+        {
+            pwdError = "New password must be at least 6 characters.";
+            return;
+        }
+
+        isSavingPwd = true;
+
+        var (ok, error) = await ApiService.ChangePasswordAsync(currentPassword, newPassword);
+        if (ok)
+        {
+            pwdSuccess = true;
+            currentPassword = string.Empty;
+            newPassword = string.Empty;
+            confirmPassword = string.Empty;
+        }
+        else
+        {
+            pwdError = error;
+        }
+
+        isSavingPwd = false;
+    }
+}

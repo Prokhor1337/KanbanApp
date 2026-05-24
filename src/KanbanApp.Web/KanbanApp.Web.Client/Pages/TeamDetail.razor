@@ -1,0 +1,759 @@
+@page "/team/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using KanbanApp.Application.DTOs
+@using KanbanApp.Web.Client.Services
+@inject KanbanApiService ApiService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(team?.Name ?? "Team") — Kanban Pro</PageTitle>
+
+@if (team == null && !loadError)
+{
+    <div class="loading-center">
+        <div class="spinner"></div>
+        <span>Loading team...</span>
+    </div>
+}
+else if (loadError)
+{
+    <div class="error-center">
+        <div class="alert-error">Team not found or you don't have access.</div>
+        <a href="/teams" class="btn-back">← Back to Teams</a>
+    </div>
+}
+else
+{
+    <div class="team-detail-page">
+
+        <!-- Header -->
+        <div class="team-detail-header">
+            <div class="team-detail-avatar">@team!.Name[0]</div>
+            <div class="team-header-info">
+                <h2 class="team-detail-name">@team.Name</h2>
+                @if (!string.IsNullOrEmpty(team.Description))
+                {
+                    <p class="team-detail-desc">@team.Description</p>
+                }
+                <div class="team-meta-row">
+                    <span class="meta-badge">👤 @team.Members.Count members</span>
+                    <span class="meta-badge">📋 @team.Boards.Count boards</span>
+                </div>
+            </div>
+            <div class="team-header-actions">
+                <a href="/teams" class="btn-back">← All Teams</a>
+                @if (team.OwnerId == currentUserId)
+                {
+                    <button class="btn-delete-team" @onclick="() => showDeleteTeamModal = true">
+                        🗑 Delete Team
+                    </button>
+                }
+            </div>
+        </div>
+
+        <!-- Body -->
+        <div class="team-detail-layout">
+
+            <!-- Members Card -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h4>👤 Members</h4>
+                    @if (team.OwnerId == currentUserId)
+                    {
+                        <button class="btn-add" @onclick="() => showAddMember = !showAddMember">
+                            @(showAddMember ? "✕ Cancel" : "+ Add Member")
+                        </button>
+                    }
+                </div>
+
+                <div class="members-list">
+                    @foreach (var m in team.Members)
+                    {
+                        <div class="member-row">
+                            <div class="member-avatar">
+                                @(m.DisplayName.Length > 0 ? m.DisplayName[0].ToString().ToUpper() : "?")
+                            </div>
+                            <div class="member-info">
+                                <span class="member-name">@m.DisplayName</span>
+                                <span class="member-email">@m.Email</span>
+                            </div>
+                            <span class="role-badge @(m.Role == "Owner" ? "role-owner" : "role-member")">
+                                @m.Role
+                            </span>
+                            @if (m.Role != "Owner" && team.OwnerId == currentUserId)
+                            {
+                                <button class="btn-remove-sm" title="Remove member"
+                                        @onclick="() => RemoveMember(m.UserId)">✕</button>
+                            }
+                        </div>
+                    }
+                </div>
+
+                @if (showAddMember)
+                {
+                    <div class="add-member-form">
+                        <input type="email" @bind="inviteEmail" @bind:event="oninput"
+                               placeholder="Enter member email..." class="field-input"
+                               @onkeydown="OnEmailKeyDown" />
+                        <div class="form-actions">
+                            <button class="btn-confirm-sm" @onclick="AddMember" disabled="@isAddingMember">
+                                @(isAddingMember ? "Adding..." : "Add")
+                            </button>
+                        </div>
+                        @if (memberError != null)
+                        {
+                            <div class="field-error">⚠ @memberError</div>
+                        }
+                        @if (memberSuccess != null)
+                        {
+                            <div class="field-success">@memberSuccess</div>
+                        }
+                    </div>
+                }
+
+                <!-- Invite Link -->
+                @if (team.OwnerId == currentUserId)
+                {
+                    <div class="invite-link-section">
+                        <div class="invite-link-header">
+                            <span class="invite-link-label">🔗 Invite Link</span>
+                            @if (team.InviteCode == null)
+                            {
+                                <button class="btn-add" @onclick="GenerateInviteLink" disabled="@isGeneratingLink">
+                                    @(isGeneratingLink ? "Generating..." : "Generate")
+                                </button>
+                            }
+                            else
+                            {
+                                <button class="btn-revoke" @onclick="RevokeInviteLink">Revoke</button>
+                            }
+                        </div>
+                        @if (team.InviteCode != null)
+                        {
+                            var link = Nav.ToAbsoluteUri("/join/" + team.InviteCode);
+                            <div class="invite-link-box">
+                                <span class="invite-link-text">@link</span>
+                                <button class="btn-copy @(linkCopied ? "copied" : "")"
+                                        @onclick="@(() => CopyLink(link.ToString()))">
+                                    @(linkCopied ? "✓ Copied" : "Copy")
+                                </button>
+                            </div>
+                            <p class="invite-link-hint">Anyone with this link can join without approval.</p>
+                        }
+                        else
+                        {
+                            <p class="invite-link-hint">Share a link so teammates can join instantly.</p>
+                        }
+                    </div>
+                }
+            </div>
+
+            <!-- Boards Card -->
+            <div class="section-card">
+                <div class="section-header">
+                    <h4>📋 Shared Boards</h4>
+                    @if (team.OwnerId == currentUserId)
+                    {
+                        <button class="btn-add" @onclick="() => { showAttachBoard = !showAttachBoard; if (showAttachBoard) LoadMyBoards(); }">
+                            @(showAttachBoard ? "✕ Cancel" : "+ Attach Board")
+                        </button>
+                    }
+                </div>
+
+                @if (team.Boards.Any())
+                {
+                    <div class="boards-list">
+                        @foreach (var b in team.Boards)
+                        {
+                            <div class="board-row">
+                                <div class="board-icon">📋</div>
+                                <div class="board-info">
+                                    <span class="board-name">@b.Title</span>
+                                    @if (!string.IsNullOrEmpty(b.Description))
+                                    {
+                                        <span class="board-desc">@b.Description</span>
+                                    }
+                                </div>
+                                <div class="board-row-actions">
+                                    <button class="btn-open-board"
+                                            @onclick="@(() => Nav.NavigateTo("/board/" + b.Id))">
+                                        Open →
+                                    </button>
+                                    @if (team.OwnerId == currentUserId)
+                                    {
+                                        <button class="btn-remove-sm" title="Detach board"
+                                                @onclick="() => DetachBoard(b.Id)">✕</button>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="empty-section">
+                        No shared boards yet. Attach one of your boards to share it with the team.
+                    </div>
+                }
+
+                @if (showAttachBoard && team.OwnerId == currentUserId)
+                {
+                    <div class="attach-board-form">
+                        @if (myBoards == null)
+                        {
+                            <span class="loading-text">Loading boards...</span>
+                        }
+                        else if (!myBoards.Where(b => !team.Boards.Any(tb => tb.Id == b.Id)).Any())
+                        {
+                            <span class="loading-text">All your boards are already attached.</span>
+                        }
+                        else
+                        {
+                            <select class="field-input" @bind="selectedBoardId">
+                                <option value="">— Select a board —</option>
+                                @foreach (var b in myBoards.Where(b => !team.Boards.Any(tb => tb.Id == b.Id)))
+                                {
+                                    <option value="@b.Id">@b.Title</option>
+                                }
+                            </select>
+                            <div class="form-actions" style="margin-top:8px;">
+                                <button class="btn-confirm-sm" @onclick="AttachBoard" disabled="@isAttaching">
+                                    @(isAttaching ? "Attaching..." : "Attach")
+                                </button>
+                            </div>
+                        }
+                        @if (boardError != null)
+                        {
+                            <div class="field-error">@boardError</div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+<!-- Delete Team Confirmation Modal -->
+@if (showDeleteTeamModal)
+{
+    <div class="modal-backdrop" @onclick="() => showDeleteTeamModal = false"></div>
+    <div class="modal-box">
+        <div class="modal-box-header">
+            <h5>🗑 Delete Team?</h5>
+            <button class="modal-close" @onclick="() => showDeleteTeamModal = false">✕</button>
+        </div>
+        <div class="modal-box-body">
+            <p>Are you sure you want to delete <strong>@team?.Name</strong>?</p>
+            <p class="delete-warning">All members will be removed and boards will be detached. This cannot be undone.</p>
+        </div>
+        <div class="modal-box-footer">
+            <button class="btn-cancel-sm" @onclick="() => showDeleteTeamModal = false">Cancel</button>
+            <button class="btn-danger" @onclick="DeleteTeam" disabled="@isDeletingTeam">
+                @(isDeletingTeam ? "Deleting..." : "Yes, Delete Team")
+            </button>
+        </div>
+    </div>
+}
+
+<style>
+    /* ── Layout ────────────────────────────────────────────────── */
+    .team-detail-page {
+        padding: 20px;
+        max-width: 960px;
+        margin: 0 auto;
+    }
+
+    .loading-center {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 60vh;
+        gap: 12px;
+        color: #6b778c;
+    }
+
+    .error-center {
+        padding: 40px;
+        text-align: center;
+    }
+
+    /* ── Header ────────────────────────────────────────────────── */
+    .team-detail-header {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+        margin-bottom: 24px;
+        background: white;
+        border-radius: 16px;
+        padding: 20px;
+        border: 1px solid #e8ecf0;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        flex-wrap: wrap;
+    }
+
+    .team-detail-avatar {
+        width: 56px; height: 56px;
+        border-radius: 14px;
+        background: linear-gradient(135deg, #0052cc, #6554c0);
+        color: white; font-size: 24px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0; text-transform: uppercase;
+    }
+
+    .team-header-info { flex: 1; min-width: 160px; }
+    .team-detail-name { font-size: 22px; font-weight: 700; margin: 0; color: #172b4d; }
+    .team-detail-desc { color: #6b778c; margin: 4px 0 8px; font-size: 14px; }
+
+    .team-meta-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .meta-badge {
+        font-size: 12px; background: #f4f5f7; color: #5e6c84;
+        padding: 3px 10px; border-radius: 20px; font-weight: 500;
+    }
+
+    .team-header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .btn-back {
+        display: inline-block; padding: 8px 14px;
+        border: 1px solid #dfe1e6; border-radius: 8px;
+        color: #5e6c84; font-weight: 600; font-size: 13px;
+        text-decoration: none; transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-back:hover { border-color: #0052cc; color: #0052cc; }
+
+    .btn-delete-team {
+        background: #ffebe6; color: #de350b; border: 1px solid #ffbdad;
+        padding: 8px 14px; border-radius: 8px; font-weight: 600;
+        font-size: 13px; cursor: pointer; transition: all 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-delete-team:hover { background: #ffccc2; border-color: #ff8f73; }
+
+    /* ── Grid ──────────────────────────────────────────────────── */
+    .team-detail-layout {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+    }
+
+    /* ── Section Card ──────────────────────────────────────────── */
+    .section-card {
+        background: white; border-radius: 14px; padding: 20px;
+        border: 1px solid #e8ecf0; box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+    }
+
+    .section-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 16px;
+    }
+
+    .section-header h4 { margin: 0; font-size: 15px; font-weight: 700; color: #172b4d; }
+
+    .btn-add {
+        background: #e8f0fe; color: #0052cc; border: none;
+        padding: 6px 12px; border-radius: 6px; font-weight: 600;
+        font-size: 12px; cursor: pointer; transition: background 0.2s;
+        white-space: nowrap;
+    }
+
+    .btn-add:hover { background: #cce0ff; }
+
+    /* ── Members ───────────────────────────────────────────────── */
+    .members-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .member-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 8px 10px; border-radius: 8px;
+        transition: background 0.15s;
+    }
+
+    .member-row:hover { background: #f8f9fa; }
+
+    .member-avatar {
+        width: 34px; height: 34px; border-radius: 50%;
+        background: linear-gradient(135deg, #6554c0, #9b59b6);
+        color: white; font-size: 14px; font-weight: 700;
+        display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+
+    .member-info { flex: 1; min-width: 0; }
+    .member-name { display: block; font-weight: 600; font-size: 13px; color: #172b4d; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .member-email { display: block; font-size: 11px; color: #6b778c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .role-badge { font-size: 11px; padding: 2px 7px; border-radius: 20px; font-weight: 600; flex-shrink: 0; }
+    .role-owner { background: #fff8e1; color: #f59e0b; }
+    .role-member { background: #e3fcef; color: #00875a; }
+
+    .btn-remove-sm {
+        background: none; border: none; color: #b3bac5; cursor: pointer;
+        font-size: 13px; padding: 2px 5px; border-radius: 4px; flex-shrink: 0;
+    }
+
+    .btn-remove-sm:hover { color: #de350b; background: #ffebe6; }
+
+    /* ── Boards ────────────────────────────────────────────────── */
+    .boards-list { display: flex; flex-direction: column; gap: 8px; }
+
+    .board-row {
+        display: flex; align-items: center; gap: 10px;
+        padding: 10px 12px; border-radius: 8px; border: 1px solid #f0f0f0;
+        transition: box-shadow 0.15s;
+    }
+
+    .board-row:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.08); }
+
+    .board-icon { font-size: 18px; flex-shrink: 0; }
+
+    .board-info { flex: 1; min-width: 0; }
+    .board-name { display: block; font-weight: 600; font-size: 13px; color: #172b4d; }
+    .board-desc { display: block; font-size: 11px; color: #6b778c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .board-row-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+
+    .btn-open-board {
+        background: #0052cc; color: white; border: none;
+        padding: 5px 10px; border-radius: 6px; font-weight: 600;
+        font-size: 11px; cursor: pointer; white-space: nowrap;
+        transition: opacity 0.2s;
+    }
+
+    .btn-open-board:hover { opacity: 0.85; }
+
+    .empty-section { color: #6b778c; font-size: 13px; padding: 12px 0; line-height: 1.5; }
+    .loading-text { color: #6b778c; font-size: 13px; }
+
+    /* ── Forms ─────────────────────────────────────────────────── */
+    .add-member-form, .attach-board-form {
+        margin-top: 16px; padding-top: 14px;
+        border-top: 1px dashed #dfe1e6;
+    }
+
+    .field-input {
+        width: 100%; border: 2px solid #dfe1e6; border-radius: 8px;
+        padding: 9px 12px; font-size: 14px; outline: none;
+        transition: border-color 0.2s; box-sizing: border-box;
+    }
+
+    .field-input:focus { border-color: #0052cc; }
+
+    .form-actions { display: flex; gap: 8px; margin-top: 8px; }
+
+    .btn-confirm-sm {
+        background: #0052cc; color: white; border: none;
+        padding: 7px 16px; border-radius: 6px; font-weight: 600;
+        font-size: 13px; cursor: pointer; transition: opacity 0.2s;
+    }
+
+    .btn-confirm-sm:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .btn-cancel-sm {
+        background: #f4f5f7; border: none; padding: 7px 14px;
+        border-radius: 6px; font-weight: 600; font-size: 13px;
+        cursor: pointer; color: #5e6c84;
+    }
+
+    .field-error {
+        background: #ffebe6; color: #de350b;
+        border-radius: 6px; padding: 8px 12px;
+        font-size: 13px; margin-top: 8px;
+    }
+
+    .field-success {
+        background: #e3fcef; color: #00875a;
+        border-radius: 6px; padding: 8px 12px;
+        font-size: 13px; margin-top: 8px;
+    }
+
+    .alert-error {
+        background: #ffebe6; color: #de350b;
+        border-radius: 8px; padding: 12px 16px;
+        margin-bottom: 16px; font-weight: 600;
+    }
+
+    /* ── Invite Link ───────────────────────────────────────────── */
+    .invite-link-section {
+        margin-top: 16px; padding-top: 14px;
+        border-top: 1px dashed #dfe1e6;
+    }
+
+    .invite-link-header {
+        display: flex; justify-content: space-between; align-items: center;
+        margin-bottom: 8px;
+    }
+
+    .invite-link-label { font-size: 13px; font-weight: 600; color: #172b4d; }
+
+    .invite-link-box {
+        display: flex; align-items: center; gap: 8px;
+        background: #f8f9fa; border: 1px solid #dfe1e6;
+        border-radius: 8px; padding: 8px 10px;
+    }
+
+    .invite-link-text {
+        flex: 1; font-size: 11px; color: #5e6c84;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        font-family: monospace;
+    }
+
+    .btn-copy {
+        background: #0052cc; color: white; border: none;
+        padding: 4px 10px; border-radius: 5px; font-size: 11px;
+        font-weight: 600; cursor: pointer; white-space: nowrap;
+        transition: background 0.2s; flex-shrink: 0;
+    }
+
+    .btn-copy.copied { background: #00875a; }
+
+    .btn-revoke {
+        background: #ffebe6; color: #de350b; border: none;
+        padding: 5px 10px; border-radius: 6px; font-size: 12px;
+        font-weight: 600; cursor: pointer; transition: background 0.2s;
+    }
+
+    .btn-revoke:hover { background: #ffccc2; }
+
+    .invite-link-hint { font-size: 11px; color: #6b778c; margin: 6px 0 0; }
+
+    /* ── Delete Modal ──────────────────────────────────────────── */
+    .modal-backdrop {
+        position: fixed; inset: 0;
+        background: rgba(9,30,66,0.54); z-index: 1040;
+    }
+
+    .modal-box {
+        position: fixed; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 1050; background: white;
+        border-radius: 16px;
+        box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+        width: calc(100% - 32px); max-width: 440px;
+    }
+
+    .modal-box-header {
+        padding: 18px 20px 14px;
+        border-bottom: 1px solid #f0f0f0;
+        display: flex; justify-content: space-between; align-items: center;
+    }
+
+    .modal-box-header h5 { margin: 0; font-size: 17px; font-weight: 700; color: #172b4d; }
+
+    .modal-close {
+        background: none; border: none; font-size: 15px;
+        color: #6b778c; cursor: pointer; padding: 4px 8px; border-radius: 4px;
+    }
+
+    .modal-close:hover { background: #f4f5f7; }
+
+    .modal-box-body { padding: 16px 20px; font-size: 14px; color: #172b4d; line-height: 1.5; }
+    .modal-box-body p { margin-bottom: 8px; }
+
+    .delete-warning { color: #6b778c; font-size: 13px; }
+
+    .modal-box-footer {
+        padding: 12px 20px 18px;
+        display: flex; justify-content: flex-end; gap: 10px;
+        border-top: 1px solid #f0f0f0;
+    }
+
+    .btn-danger {
+        background: #de350b; color: white; border: none;
+        padding: 9px 18px; border-radius: 8px; font-weight: 700;
+        font-size: 13px; cursor: pointer; transition: opacity 0.2s;
+    }
+
+    .btn-danger:hover:not(:disabled) { opacity: 0.85; }
+    .btn-danger:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ── Spinner ───────────────────────────────────────────────── */
+    .spinner {
+        width: 24px; height: 24px;
+        border: 3px solid #e8ecf0;
+        border-top-color: #0052cc;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    @@keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Responsive ────────────────────────────────────────────── */
+    @@media (max-width: 700px) {
+        .team-detail-page { padding: 12px; }
+
+        .team-detail-header {
+            flex-direction: column;
+            gap: 12px;
+            padding: 16px;
+        }
+
+        .team-header-actions {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
+        .team-detail-layout {
+            grid-template-columns: 1fr;
+        }
+
+        .section-card { padding: 16px; }
+
+        .invite-link-text { max-width: 160px; }
+
+        .board-row-actions { flex-direction: column; gap: 4px; }
+    }
+
+    @@media (max-width: 400px) {
+        .team-detail-avatar { width: 44px; height: 44px; font-size: 20px; }
+        .team-detail-name { font-size: 18px; }
+    }
+</style>
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+
+    private TeamDetailDto? team;
+    private bool loadError = false;
+    private string? currentUserId;
+    private bool _loaded = false;
+
+    // Members
+    private bool showAddMember = false;
+    private string inviteEmail = string.Empty;
+    private string? memberError;
+    private string? memberSuccess;
+    private bool isAddingMember = false;
+
+    // Boards
+    private bool showAttachBoard = false;
+    private List<BoardDto>? myBoards;
+    private string selectedBoardId = string.Empty;
+    private string? boardError;
+    private bool isAttaching = false;
+
+    // Invite link
+    private bool isGeneratingLink = false;
+    private bool linkCopied = false;
+
+    // Delete team
+    private bool showDeleteTeamModal = false;
+    private bool isDeletingTeam = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _loaded) return;
+        _loaded = true;
+        try
+        {
+            // GetCurrentUserIdAsync needs localStorage — only available after render
+            currentUserId = await ApiService.GetCurrentUserIdAsync();
+            team = await ApiService.GetTeamAsync(Id);
+            if (team == null) { loadError = true; }
+        }
+        catch { loadError = true; }
+        StateHasChanged();
+    }
+
+    private async Task Reload() => team = await ApiService.GetTeamAsync(Id);
+
+    // ── Members ──────────────────────────────────────────────────
+    private async Task OnEmailKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter") await AddMember();
+    }
+
+    private async Task AddMember()
+    {
+        if (string.IsNullOrWhiteSpace(inviteEmail)) return;
+
+        isAddingMember = true;
+        memberError = null;
+        memberSuccess = null;
+
+        var error = await ApiService.AddTeamMemberAsync(Id, inviteEmail.Trim());
+        if (error == null)
+        {
+            memberSuccess = $"✓ {inviteEmail} added!";
+            inviteEmail = string.Empty;
+            await Reload();
+        }
+        else
+        {
+            memberError = error;
+        }
+
+        isAddingMember = false;
+    }
+
+    private async Task RemoveMember(string userId)
+    {
+        var ok = await ApiService.RemoveTeamMemberAsync(Id, userId);
+        if (ok) await Reload();
+    }
+
+    // ── Boards ───────────────────────────────────────────────────
+    private async Task LoadMyBoards()
+    {
+        if (myBoards == null)
+            myBoards = await ApiService.GetBoardsAsync() ?? [];
+    }
+
+    private async Task AttachBoard()
+    {
+        if (!Guid.TryParse(selectedBoardId, out var boardId)) return;
+        isAttaching = true; boardError = null;
+        var ok = await ApiService.AddBoardToTeamAsync(Id, boardId);
+        if (ok) { showAttachBoard = false; selectedBoardId = string.Empty; await Reload(); }
+        else { boardError = "Failed to attach. Make sure you own this board."; }
+        isAttaching = false;
+    }
+
+    private async Task DetachBoard(Guid boardId)
+    {
+        var ok = await ApiService.RemoveBoardFromTeamAsync(Id, boardId);
+        if (ok) await Reload();
+    }
+
+    // ── Invite Link ───────────────────────────────────────────────
+    private async Task GenerateInviteLink()
+    {
+        isGeneratingLink = true;
+        var code = await ApiService.GenerateInviteLinkAsync(Id);
+        if (code != null) await Reload();
+        isGeneratingLink = false;
+    }
+
+    private async Task RevokeInviteLink()
+    {
+        await ApiService.RevokeInviteLinkAsync(Id);
+        await Reload();
+    }
+
+    private async Task CopyLink(string url)
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", url);
+        linkCopied = true; StateHasChanged();
+        await Task.Delay(2000);
+        linkCopied = false; StateHasChanged();
+    }
+
+    // ── Delete Team ───────────────────────────────────────────────
+    private async Task DeleteTeam()
+    {
+        isDeletingTeam = true;
+        var ok = await ApiService.DeleteTeamAsync(Id);
+        if (ok)
+            Nav.NavigateTo("/teams");
+        else
+        {
+            isDeletingTeam = false;
+            showDeleteTeamModal = false;
+        }
+    }
+}

@@ -1,0 +1,124 @@
+@page "/login"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using KanbanApp.Web.Client.Services
+@inject AuthService AuthService
+@inject NavigationManager Nav
+
+<PageTitle>Login</PageTitle>
+
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow-sm border-0" style="border-radius: 12px;">
+                <div class="card-body p-4">
+                    <h3 class="text-center mb-4" style="font-weight: 600;">Log In</h3>
+
+                    @if (showError)
+                    {
+                        <div class="alert alert-danger" style="border-radius: 8px;">@errorMessage</div>
+                    }
+
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Email</label>
+                        <input type="email" class="form-control @(emailError != null ? "is-invalid" : "")"
+                               @bind="email" @oninput="ClearErrors" placeholder="name@example.com" />
+                        @if (emailError != null)
+                        {
+                            <div class="invalid-feedback">@emailError</div>
+                        }
+                    </div>
+                    <div class="mb-4">
+                        <label class="form-label text-muted">Password</label>
+                        <input type="password" class="form-control @(passwordError != null ? "is-invalid" : "")"
+                               @bind="password" @oninput="ClearErrors" placeholder="••••••••" />
+                        @if (passwordError != null)
+                        {
+                            <div class="invalid-feedback">@passwordError</div>
+                        }
+                    </div>
+                    <button class="btn btn-primary w-100 mb-3" style="border-radius: 8px; font-weight: 500;" @onclick="HandleLogin" disabled="@isLoading">
+                        @(isLoading ? "Logging in..." : "Log In")
+                    </button>
+                    <div class="text-center">
+                        <span class="text-muted">Don't have an account? </span>
+                        <a href="/register" class="text-decoration-none" style="font-weight: 500;">Register here</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private bool showError = false;
+    private bool isLoading = false;
+    private string errorMessage = "Invalid email or password.";
+
+    // Validation error messages per field
+    private string? emailError;
+    private string? passwordError;
+
+    private void ClearErrors()
+    {
+        emailError = null;
+        passwordError = null;
+        showError = false;
+    }
+
+    private bool ValidateInputs()
+    {
+        var valid = true;
+
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@') || !email.Contains('.'))
+        {
+            emailError = "Please enter a valid email address.";
+            valid = false;
+        }
+
+        if (string.IsNullOrWhiteSpace(password) || password.Length < 6)
+        {
+            passwordError = "Password must be at least 6 characters.";
+            valid = false;
+        }
+
+        return valid;
+    }
+
+    private async Task HandleLogin()
+    {
+        // Run frontend validation first — skip API call if invalid
+        if (!ValidateInputs()) return;
+
+        showError = false;
+        isLoading = true;
+        StateHasChanged();
+
+        try
+        {
+            var success = await AuthService.LoginAsync(email, password);
+
+            if (success)
+            {
+                Nav.NavigateTo("/boards");
+            }
+            else
+            {
+                errorMessage = "Invalid email or password.";
+                showError = true;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Login error: {ex.Message}");
+            errorMessage = $"System error: {ex.Message}";
+            showError = true;
+        }
+        finally
+        {
+            isLoading = false;
+            StateHasChanged();
+        }
+    }
+}

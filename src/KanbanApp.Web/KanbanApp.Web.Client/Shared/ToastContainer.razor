@@ -1,0 +1,78 @@
+@using KanbanApp.Web.Client.Services
+@inject ToastService ToastService
+@implements IDisposable
+
+@if (_toasts.Any())
+{
+    <div style="position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 10px; min-width: 300px;">
+        @foreach (var toast in _toasts)
+        {
+            <div style="@GetStyle(toast.Type) padding: 14px 18px; border-radius: 10px; color: white;
+                         box-shadow: 0 4px 20px rgba(0,0,0,0.18); display: flex; align-items: center;
+                         gap: 10px; animation: slideIn 0.3s ease; font-size: 14px; font-weight: 500;">
+                <span style="font-size: 18px;">@GetIcon(toast.Type)</span>
+                <span style="flex: 1;">@toast.Message</span>
+                <button @onclick="() => Remove(toast.Id)"
+                        style="background: none; border: none; color: white; opacity: 0.7;
+                               cursor: pointer; font-size: 16px; padding: 0; line-height: 1;">✕</button>
+            </div>
+        }
+    </div>
+}
+
+<style>
+    @@keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to   { transform: translateX(0);   opacity: 1; }
+    }
+</style>
+
+@code {
+    private List<ToastMessage> _toasts = new();
+
+    protected override void OnInitialized()
+    {
+        ToastService.OnShow += HandleShow;
+    }
+
+    private async void HandleShow(ToastMessage toast)
+    {
+        _toasts.Add(toast);
+        await InvokeAsync(StateHasChanged);
+
+        // Auto-dismiss after 3.5 seconds
+        await Task.Delay(3500);
+        Remove(toast.Id);
+    }
+
+    private void Remove(Guid id)
+    {
+        var toast = _toasts.FirstOrDefault(t => t.Id == id);
+        if (toast != null)
+        {
+            _toasts.Remove(toast);
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private static string GetStyle(ToastType type) => type switch
+    {
+        ToastType.Success => "background: linear-gradient(135deg, #22c55e, #16a34a);",
+        ToastType.Error   => "background: linear-gradient(135deg, #ef4444, #dc2626);",
+        ToastType.Info    => "background: linear-gradient(135deg, #3b82f6, #2563eb);",
+        _                 => "background: #374151;"
+    };
+
+    private static string GetIcon(ToastType type) => type switch
+    {
+        ToastType.Success => "✓",
+        ToastType.Error   => "✕",
+        ToastType.Info    => "ℹ",
+        _                 => "•"
+    };
+
+    public void Dispose()
+    {
+        ToastService.OnShow -= HandleShow;
+    }
+}

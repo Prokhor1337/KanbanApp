@@ -1,0 +1,56 @@
+## Build output
+bin/
+obj/
+out/
+publish/
+
+## IDE
+.idea/
+.vs/
+*.user
+*.suo
+.vscode/
+
+## ASP.NET Data Protection keys (contain secrets)
+**/AuthKeys/
+
+## Secrets — NEVER commit these!
+appsettings.Development.json
+appsettings.Production.json
+appsettings.*.json
+!appsettings.json
+
+## .NET
+*.nupkg
+*.snupkg
+.nuget/
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+## Logs
+*.log
+logs/
+
+## OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V7
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+## Docker (local only)
+.env
+docker-compose.override.yml
+
+## Temp files
+*.tmp
+*.bak
+*.orig
+
+## Crash dumps (created by dotnet errors in project root)
+System.MissingMethodException*
+System.Security.*
+dotnet-install.sh

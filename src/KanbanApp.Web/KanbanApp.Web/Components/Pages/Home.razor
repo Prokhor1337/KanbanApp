@@ -1,0 +1,51 @@
+﻿@page "/"
+@using Microsoft.AspNetCore.Components.Authorization
+@* Обрати внимание: мы удалили @rendermode и @inject NavigationManager *@
+
+<PageTitle>Kanban Pro - Manage Tasks Efficiently</PageTitle>
+
+<div class="container mt-5 text-center" style="max-width: 800px;">
+    <h1 class="display-4 fw-bold mb-4" style="color: #091e42;">Organize your work, <br />one board at a time.</h1>
+    <p class="lead text-muted mb-5">
+        A simple, fast, and secure Kanban board for developers and teams. 
+        Keep track of your tasks, move them seamlessly, and stay productive.
+    </p>
+
+    <AuthorizeView>
+        <Authorized>
+            <div class="p-4" style="background-color: #f4f5f7; border-radius: 12px; display: inline-block;">
+                <h4 class="mb-3">Welcome back, @context.User.Identity?.Name!</h4>
+                <a href="/boards" class="btn btn-primary btn-lg px-5" style="border-radius: 8px;">
+                    Go to My Boards
+                </a>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <div class="d-flex justify-content-center gap-3">
+                <a href="/register" class="btn btn-primary btn-lg px-4" style="border-radius: 8px;">
+                    Get Started for Free
+                </a>
+                <a href="/login" class="btn btn-outline-secondary btn-lg px-4" style="border-radius: 8px;">
+                    Log In
+                </a>
+            </div>
+        </NotAuthorized>
+    </AuthorizeView>
+
+    <div class="mt-5 pt-5">
+        <div class="row text-start">
+            <div class="col-md-4 mb-4">
+                <h5 class="fw-bold">Visual Workflow</h5>
+                <p class="text-muted">Drag and drop tasks between columns instantly. See the big picture at a glance.</p>
+            </div>
+            <div class="col-md-4 mb-4">
+                <h5 class="fw-bold">Secure Access</h5>
+                <p class="text-muted">Your data is protected with JWT bearer tokens and ASP.NET Core Identity.</p>
+            </div>
+            <div class="col-md-4 mb-4">
+                <h5 class="fw-bold">Fast & Responsive</h5>
+                <p class="text-muted">Built with Blazor WebAssembly for a near-native single-page application experience.</p>
+            </div>
+        </div>
+    </div>
+</div>

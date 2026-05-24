@@ -1,0 +1,532 @@
+@page "/board/{Id:guid}"
+@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
+@using KanbanApp.Application.DTOs
+@using KanbanApp.Web.Client.Services
+@using Microsoft.AspNetCore.SignalR.Client
+@inject KanbanApiService ApiService
+@inject NavigationManager Nav
+@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (loadError != null)
+{
+    <div class="container mt-5 text-center">
+        <div class="alert alert-danger">@loadError</div>
+        <a href="/boards" class="btn btn-primary">← Back to Boards</a>
+    </div>
+}
+else if (board == null)
+{
+    <div style="display:flex;align-items:center;justify-content:center;height:80vh;">
+        <div class="spinner-border text-primary" role="status"></div>
+        <span class="ms-3 text-muted">Loading board...</span>
+    </div>
+}
+else
+{
+    <PageTitle>@board.Title</PageTitle>
+
+    <div class="board-page">
+        <div class="board-page-header">
+            <div class="board-page-title-block">
+                <h2 class="board-page-title">@board.Title</h2>
+                @if (!string.IsNullOrEmpty(board.Description))
+                {
+                    <p class="board-page-desc">@board.Description</p>
+                }
+            </div>
+            <button class="btn @(isCopied ? "btn-success" : "btn-outline-primary") btn-sm share-btn"
+                    @onclick="ShareBoard">
+                @(isCopied ? "✓ Copied!" : "🔗 Share")
+            </button>
+        </div>
+
+        <div class="board-columns-scroll">
+
+            @foreach (var column in board.Columns.OrderBy(c => c.Order))
+            {
+                <div style="background-color: #f4f5f7; border-radius: 8px; width: 300px; min-width: 300px; padding: 16px; display: flex; flex-direction: column;">
+
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+                        <h5 style="margin: 0; font-weight: 600;">@column.Title</h5>
+                        <button class="btn btn-sm text-danger"
+                                style="padding: 0 4px; background: none; border: none; font-weight: bold;"
+                                @onclick="() => ShowDeleteModal(column.Id)"
+                                title="Delete list">✕</button>
+                    </div>
+
+                    <div style="flex-grow: 1; overflow-y: auto; padding-bottom: 20px; min-height: 50px;"
+                         ondragover="event.preventDefault();"
+                         @ondrop="() => HandleDrop(column.Id)">
+
+                        @foreach (var task in column.Tasks.OrderBy(t => t.Order))
+                        {
+                            <div draggable="true"
+                                 @ondragstart="() => HandleDragStart(task, column.Id)"
+                                 style="background-color: white; padding: 12px 12px 10px 12px; border-radius: 6px;
+                                        box-shadow: 0 1px 2px rgba(0,0,0,0.1); margin-bottom: 8px;
+                                        cursor: grab; position: relative; min-width: 0; overflow: hidden;">
+
+                                @* Action buttons: edit + delete *@
+                                <div style="position: absolute; top: 6px; right: 6px; display: flex; gap: 2px; z-index: 1; background: white; border-radius: 4px; padding: 1px;">
+                                    <button class="btn btn-sm"
+                                            style="padding: 0 4px; background: none; border: none; font-size: 13px; line-height: 1.4; color: #6b778c;"
+                                            @onclick:stopPropagation="true"
+                                            @onclick="() => OpenEditModal(task)"
+                                            title="Edit card">✏️</button>
+                                    <button class="btn btn-sm"
+                                            style="padding: 0 4px; background: none; border: none; font-size: 13px; line-height: 1.4; color: #6b778c;"
+                                            @onclick:stopPropagation="true"
+                                            @onclick="() => DeleteTask(task.Id)"
+                                            title="Delete card">✕</button>
+                                </div>
+
+                                <strong style="display: block; margin-bottom: 4px; padding-right: 52px;
+                                               word-break: break-word; overflow-wrap: break-word; line-height: 1.4;">
+                                    @task.Title
+                                </strong>
+                                @if (!string.IsNullOrEmpty(task.Description))
+                                {
+                                    <span style="font-size: 12px; color: #6b778c; display: -webkit-box;
+                                                 -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+                                                 overflow: hidden; word-break: break-word;">
+                                        @task.Description
+                                    </span>
+                                }
+                                @if (task.DueDate.HasValue)
+                                {
+                                    <div style="font-size: 11px; color: #de350b; margin-top: 4px;">
+                                        📅 @task.DueDate.Value.ToString("dd MMM", System.Globalization.CultureInfo.InvariantCulture)
+                                    </div>
+                                }
+                                <div style="margin-top: 6px;">
+                                    <span style="font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: 600;
+                                                 background: @GetPriorityColor(task.Priority); color: white;">
+                                        @task.Priority
+                                    </span>
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    <div style="margin-top: 8px;">
+                        @if (addingTaskToColumnId == column.Id)
+                        {
+                            <input @bind="newTaskTitle" class="form-control form-control-sm" style="margin-bottom: 8px;" placeholder="Enter a title for this card..." autofocus />
+                            <div style="display: flex; gap: 8px;">
+                                <button class="btn btn-primary btn-sm" @onclick="() => AddTask(column.Id)">Add card</button>
+                                <button class="btn btn-light btn-sm" @onclick="() => { addingTaskToColumnId = null; newTaskTitle = string.Empty; }">Cancel</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div @onclick="() => addingTaskToColumnId = column.Id"
+                                 style="cursor: pointer; color: #5e6c84; font-size: 14px; padding: 6px 8px; border-radius: 4px; transition: background-color 0.2s;">
+                                + Add a card
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div style="width: 300px; min-width: 300px; padding: 16px; background-color: rgba(9, 30, 66, 0.04); border-radius: 8px; height: fit-content;">
+                @if (isAddingColumn)
+                {
+                    <input @bind="newColumnTitle" class="form-control" style="margin-bottom: 8px;" placeholder="Enter list title..." autofocus />
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn btn-primary btn-sm" @onclick="AddColumn">Add list</button>
+                        <button class="btn btn-light btn-sm" @onclick="() => { isAddingColumn = false; newColumnTitle = string.Empty; }">Cancel</button>
+                    </div>
+                }
+                else
+                {
+                    <div @onclick="() => isAddingColumn = true" style="cursor: pointer; color: #5e6c84; font-weight: 500;">
+                        + Add another list
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Delete Column Modal ─────────────────────────────────── *@
+    @if (isDeleteModalOpen)
+    {
+        <div class="modal-backdrop fade show" style="background-color: rgba(9, 30, 66, 0.54);"></div>
+        <div class="modal fade show d-block" tabindex="-1" style="z-index: 1050;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 8px 30px rgba(0,0,0,0.12);">
+                    <div class="modal-header" style="border-bottom: none; padding-bottom: 0;">
+                        <h5 class="modal-title" style="color: #de350b; font-weight: 600;">Delete List?</h5>
+                        <button type="button" class="btn-close" @onclick="CloseDeleteModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p style="margin-bottom: 8px;">Are you sure you want to delete this list and <strong>ALL</strong> cards inside it?</p>
+                        <p style="font-size: 14px; color: #6c757d; margin-bottom: 0;">This action cannot be undone.</p>
+                    </div>
+                    <div class="modal-footer" style="border-top: none; padding-top: 0;">
+                        <button type="button" class="btn btn-light" @onclick="CloseDeleteModal">Cancel</button>
+                        <button type="button" class="btn btn-danger" style="background-color: #de350b; border-color: #de350b;" @onclick="ConfirmDelete">Yes, delete it</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Edit Task Modal ──────────────────────────────────────── *@
+    @if (isEditModalOpen && editTask != null)
+    {
+        <div class="modal-backdrop fade show" style="background-color: rgba(9, 30, 66, 0.54);"></div>
+        <div class="modal fade show d-block" tabindex="-1" style="z-index: 1050;">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content" style="border-radius: 12px; border: none; box-shadow: 0 8px 30px rgba(0,0,0,0.12);">
+                    <div class="modal-header" style="border-bottom: 1px solid #f0f0f0;">
+                        <h5 class="modal-title" style="font-weight: 600;">✏️ Edit Card</h5>
+                        <button type="button" class="btn-close" @onclick="CloseEditModal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Title</label>
+                            <input type="text" class="form-control" @bind="editTitle" placeholder="Card title" />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Description</label>
+                            <textarea class="form-control" @bind="editDescription" rows="3" placeholder="Add a description..."></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Priority</label>
+                            <select class="form-select" @bind="editPriority">
+                                <option value="Low">🟢 Low</option>
+                                <option value="Medium">🟡 Medium</option>
+                                <option value="High">🔴 High</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Due Date</label>
+                            <input type="date" class="form-control" @bind="editDueDate" />
+                        </div>
+                    </div>
+                    <div class="modal-footer" style="border-top: 1px solid #f0f0f0;">
+                        <button type="button" class="btn btn-light" @onclick="CloseEditModal">Cancel</button>
+                        <button type="button" class="btn btn-primary" style="font-weight: 500;" @onclick="SaveEdit" disabled="@isSaving">
+                            @(isSaving ? "Saving..." : "Save Changes")
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+<style>
+    /* ── Board Page Layout ──────────────────────────────────────── */
+    .board-page {
+        padding: 20px;
+        height: calc(100vh - 56px);
+        display: flex;
+        flex-direction: column;
+        box-sizing: border-box;
+    }
+
+    .board-page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 20px;
+        gap: 12px;
+        flex-shrink: 0;
+    }
+
+    .board-page-title-block { flex: 1; min-width: 0; }
+
+    .board-page-title {
+        margin: 0;
+        font-size: 22px;
+        font-weight: 700;
+        color: #172b4d;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .board-page-desc {
+        color: #6c757d;
+        margin: 6px 0 0;
+        font-size: 14px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .share-btn {
+        white-space: nowrap;
+        flex-shrink: 0;
+        font-weight: 500;
+    }
+
+    .board-columns-scroll {
+        display: flex;
+        gap: 16px;
+        overflow-x: auto;
+        flex-grow: 1;
+        padding-bottom: 16px;
+        /* smooth scrolling on mobile */
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x proximity;
+    }
+
+    /* ── Responsive ─────────────────────────────────────────────── */
+    @@media (max-width: 640px) {
+        .board-page { padding: 12px; height: auto; min-height: calc(100vh - 56px); }
+
+        .board-page-header { margin-bottom: 14px; }
+
+        .board-page-title { font-size: 18px; }
+
+        .board-columns-scroll { gap: 10px; }
+    }
+</style>
+
+@code {
+    [Parameter]
+    public Guid Id { get; set; }
+
+    private BoardDto? board;
+    private HubConnection? hubConnection;
+    private string? loadError;
+
+    private bool isAddingColumn = false;
+    private string newColumnTitle = string.Empty;
+
+    private Guid? addingTaskToColumnId = null;
+    private string newTaskTitle = string.Empty;
+
+    private TaskItemDto? draggedTask;
+    private Guid? sourceColumnId;
+
+    // Delete column modal
+    private bool isDeleteModalOpen = false;
+    private Guid columnToDeleteId;
+
+    // Share button
+    private bool isCopied = false;
+
+    // Edit task modal
+    private bool isEditModalOpen = false;
+    private bool isSaving = false;
+    private TaskItemDto? editTask;
+    private string editTitle = string.Empty;
+    private string editDescription = string.Empty;
+    private string editPriority = "Medium";
+    private DateTime? editDueDate;
+
+    private static string GetPriorityColor(string priority) => priority switch
+    {
+        "High"   => "#ef4444",
+        "Medium" => "#f59e0b",
+        "Low"    => "#22c55e",
+        _        => "#6b7280"
+    };
+
+    private async Task ShareBoard()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", Nav.Uri);
+        isCopied = true;
+        StateHasChanged();
+        await Task.Delay(2000);
+        isCopied = false;
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            board = await ApiService.GetBoardAsync(Id);
+        }
+        catch (Exception ex)
+        {
+            loadError = $"Failed to load board: {ex.Message}";
+            return;
+        }
+
+        if (board == null)
+        {
+            loadError = "Board not found or you don't have access.";
+            return;
+        }
+
+        // Connect to SignalR with JWT token
+        var token = await LocalStorage.GetItemAsStringAsync("authToken");
+
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl(Nav.ToAbsoluteUri("/boardhub"), options =>
+            {
+                options.AccessTokenProvider = () => Task.FromResult<string?>(token);
+            })
+            .Build();
+
+        hubConnection.On("BoardUpdated", async () =>
+        {
+            board = await ApiService.GetBoardAsync(Id);
+            await InvokeAsync(StateHasChanged);
+        });
+
+        hubConnection.On<Guid>("AccessDenied", async (_) =>
+        {
+            await InvokeAsync(() => Nav.NavigateTo("/boards"));
+        });
+
+        try
+        {
+            await hubConnection.StartAsync();
+            await hubConnection.SendAsync("JoinBoardGroup", Id);
+        }
+        catch
+        {
+            // SignalR unavailable — continuing without real-time updates
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            try { await hubConnection.SendAsync("LeaveBoardGroup", Id); } catch { }
+            await hubConnection.DisposeAsync();
+        }
+    }
+
+    // ── Edit Modal ──────────────────────────────────────────────
+    private void OpenEditModal(TaskItemDto task)
+    {
+        editTask = task;
+        editTitle = task.Title;
+        editDescription = task.Description ?? string.Empty;
+        editPriority = task.Priority;
+        editDueDate = task.DueDate;
+        isEditModalOpen = true;
+    }
+
+    private void CloseEditModal()
+    {
+        isEditModalOpen = false;
+        editTask = null;
+    }
+
+    private async Task SaveEdit()
+    {
+        if (editTask == null || string.IsNullOrWhiteSpace(editTitle)) return;
+
+        isSaving = true;
+
+        var dto = new UpdateTaskDto
+        {
+            Title       = editTitle,
+            Description = editDescription,
+            Priority    = editPriority,
+            DueDate     = editDueDate,
+            ColumnId    = editTask.ColumnId,
+            Order       = editTask.Order,
+            AssigneeId  = editTask.AssigneeId
+        };
+
+        var success = await ApiService.UpdateTaskAsync(editTask.Id, dto);
+        if (success)
+        {
+            isEditModalOpen = false;
+            editTask = null;
+            board = await ApiService.GetBoardAsync(Id);
+        }
+
+        isSaving = false;
+    }
+
+    // ── Add Column / Task ───────────────────────────────────────
+    private async Task AddColumn()
+    {
+        if (!string.IsNullOrWhiteSpace(newColumnTitle) && board != null)
+        {
+            var result = await ApiService.CreateColumnAsync(new CreateColumnDto
+            {
+                Title   = newColumnTitle,
+                BoardId = board.Id,
+                Order   = board.Columns.Count
+            });
+            if (result != null)
+            {
+                isAddingColumn = false;
+                newColumnTitle = string.Empty;
+                board = await ApiService.GetBoardAsync(Id);
+            }
+        }
+    }
+
+    private async Task AddTask(Guid columnId)
+    {
+        if (!string.IsNullOrWhiteSpace(newTaskTitle) && board != null)
+        {
+            var result = await ApiService.CreateTaskAsync(new CreateTaskDto
+            {
+                Title    = newTaskTitle,
+                ColumnId = columnId,
+                Priority = "Medium"
+            });
+            if (result != null)
+            {
+                addingTaskToColumnId = null;
+                newTaskTitle = string.Empty;
+                board = await ApiService.GetBoardAsync(Id);
+            }
+        }
+    }
+
+    // ── Delete Column ───────────────────────────────────────────
+    private void ShowDeleteModal(Guid columnId)
+    {
+        columnToDeleteId = columnId;
+        isDeleteModalOpen = true;
+    }
+
+    private void CloseDeleteModal() => isDeleteModalOpen = false;
+
+    private async Task ConfirmDelete()
+    {
+        var success = await ApiService.DeleteColumnAsync(columnToDeleteId);
+        if (success)
+        {
+            isDeleteModalOpen = false;
+            board = await ApiService.GetBoardAsync(Id);
+        }
+    }
+
+    private async Task DeleteTask(Guid taskId)
+    {
+        var success = await ApiService.DeleteTaskAsync(taskId);
+        if (success)
+            board = await ApiService.GetBoardAsync(Id);
+    }
+
+    // ── Drag & Drop ─────────────────────────────────────────────
+    private void HandleDragStart(TaskItemDto task, Guid columnId)
+    {
+        draggedTask   = task;
+        sourceColumnId = columnId;
+    }
+
+    private async Task HandleDrop(Guid targetColumnId)
+    {
+        if (draggedTask == null || sourceColumnId == null || sourceColumnId == targetColumnId)
+            return;
+
+        var targetColumn = board?.Columns.FirstOrDefault(c => c.Id == targetColumnId);
+        var newOrder = targetColumn?.Tasks.Count ?? 0;
+
+        var success = await ApiService.MoveTaskAsync(draggedTask.Id, targetColumnId, newOrder);
+        if (success)
+            board = await ApiService.GetBoardAsync(Id);
+
+        draggedTask    = null;
+        sourceColumnId = null;
+    }
+}
