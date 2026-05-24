@@ -136,13 +136,14 @@ using (var scope = app.Services.CreateScope())
             await roleManager.CreateAsync(new IdentityRole(role));
     }
 
-    // Default admin account
-    var adminEmail = "admin@kanban.com";
+    // Default admin account — password from env variable (set ADMIN_PASSWORD in Railway)
+    var adminEmail    = Environment.GetEnvironmentVariable("ADMIN_EMAIL")    ?? "admin@kanban.com";
+    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Adm!n_K@nb@n_2026";
     var admin = await userManager.FindByEmailAsync(adminEmail);
     if (admin == null)
     {
         admin = new AppUser { UserName = adminEmail, Email = adminEmail, DisplayName = "Admin" };
-        await userManager.CreateAsync(admin, "Admin123!");
+        await userManager.CreateAsync(admin, adminPassword);
         await userManager.AddToRoleAsync(admin, "Admin");
     }
 }

@@ -58,8 +58,9 @@ dotnet run --project src/KanbanApp.Web/KanbanApp.Web
 App will be available at `https://localhost:5001` / `http://localhost:5174`
 
 ### Default admin account
-- Email: `admin@kanban.com`
-- Password: `Admin123!`
+
+A default admin account is created on first launch.  
+**Change the password immediately after first login via the Profile page.**
 
 ## Deploy to Railway
 
