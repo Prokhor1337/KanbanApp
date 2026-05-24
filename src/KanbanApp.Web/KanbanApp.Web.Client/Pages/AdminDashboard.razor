@@ -363,20 +363,21 @@
     private BoardDto? boardToDelete;
     private bool isDeleting = false;
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (!firstRender) return;
         try
         {
             allBoards = await ApiService.GetAllBoardsAsync();
-            Toast.ShowSuccess("Boards loaded successfully.");
         }
         catch (Exception ex)
         {
-            Toast.ShowError($"Server error: {ex.Message}");
+            Toast.ShowError($"Failed to load boards: {ex.Message}");
         }
         finally
         {
             isLoading = false;
+            StateHasChanged();
         }
     }
 
