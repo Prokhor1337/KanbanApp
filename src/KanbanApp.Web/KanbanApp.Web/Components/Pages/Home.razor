@@ -1,145 +1,66 @@
 @page "/"
-@rendermode @(new InteractiveWebAssemblyRenderMode(prerender: false))
-@inject NavigationManager Nav
-@inject Blazored.LocalStorage.ILocalStorageService LocalStorage
+@inject IJSRuntime JS
 
 <PageTitle>Kanban Pro - Manage Tasks Efficiently</PageTitle>
 
-@if (_loading)
-{
-    <div class="home-loading">
-        <div class="home-spinner"></div>
-    </div>
-}
-else if (_isAuthenticated)
-{
-    <div class="home-auth">
-        <div class="home-auth-card">
-            <div class="home-avatar">👋</div>
-            <h2 class="home-welcome">Welcome back!</h2>
-            <p class="home-sub">Jump right into your boards or explore your teams.</p>
-            <div class="home-auth-actions">
-                <a href="/boards" class="btn-hero-primary">
-                    📋 My Boards
-                </a>
-                <a href="/teams" class="btn-hero-secondary">
-                    👥 Teams
-                </a>
-            </div>
-        </div>
-    </div>
-}
-else
-{
-    <div class="home-hero">
-        <div class="home-hero-inner">
-            <div class="home-badge">✨ Kanban for Developers</div>
-            <h1 class="home-title">
-                Organize your work,<br />
-                <span class="home-title-accent">one board at a time.</span>
-            </h1>
-            <p class="home-desc">
-                A simple, fast, and secure Kanban board for developers and teams.
-                Keep track of your tasks, move them seamlessly, and stay productive.
-            </p>
-            <div class="home-cta">
-                <a href="/register" class="btn-hero-primary">
-                    🚀 Get Started for Free
-                </a>
-                <a href="/login" class="btn-hero-ghost">
-                    Log In
-                </a>
-            </div>
+@* JS checks localStorage — if token exists, redirects to /boards immediately *@
+<script id="home-auth-check">
+    (function() {
+        try {
+            var token = localStorage.getItem('authToken');
+            if (token && token.length > 0) {
+                window.location.replace('/boards');
+            }
+        } catch(e) {}
+    })();
+</script>
 
-            <div class="home-features">
-                <div class="feature-card">
-                    <div class="feature-icon">🎯</div>
-                    <h3>Visual Workflow</h3>
-                    <p>Drag and drop tasks between columns instantly. See the big picture at a glance.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">🔐</div>
-                    <h3>Secure Access</h3>
-                    <p>JWT authentication and ASP.NET Core Identity keep your data safe.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">⚡</div>
-                    <h3>Blazing Fast</h3>
-                    <p>Built with Blazor WebAssembly for a near-native single-page experience.</p>
-                </div>
-                <div class="feature-card">
-                    <div class="feature-icon">👥</div>
-                    <h3>Team Collaboration</h3>
-                    <p>Create teams, share boards, and collaborate in real time with SignalR.</p>
-                </div>
+<div class="home-hero">
+    <div class="home-hero-inner">
+        <div class="home-badge">✨ Kanban for Developers</div>
+        <h1 class="home-title">
+            Organize your work,<br />
+            <span class="home-title-accent">one board at a time.</span>
+        </h1>
+        <p class="home-desc">
+            A simple, fast, and secure Kanban board for developers and teams.
+            Keep track of your tasks, move them seamlessly, and stay productive.
+        </p>
+        <div class="home-cta">
+            <a href="/register" class="btn-hero-primary">
+                🚀 Get Started for Free
+            </a>
+            <a href="/login" class="btn-hero-ghost">
+                Log In
+            </a>
+        </div>
+
+        <div class="home-features">
+            <div class="feature-card">
+                <div class="feature-icon">🎯</div>
+                <h3>Visual Workflow</h3>
+                <p>Drag and drop tasks between columns instantly. See the big picture at a glance.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">🔐</div>
+                <h3>Secure Access</h3>
+                <p>JWT authentication and ASP.NET Core Identity keep your data safe.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Blazing Fast</h3>
+                <p>Built with Blazor WebAssembly for a near-native single-page experience.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">👥</div>
+                <h3>Team Collaboration</h3>
+                <p>Create teams, share boards, and collaborate in real time with SignalR.</p>
             </div>
         </div>
     </div>
-}
+</div>
 
 <style>
-    /* ── Loading ────────────────────────────────────────────────── */
-    .home-loading {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        height: 80vh;
-    }
-
-    .home-spinner {
-        width: 36px;
-        height: 36px;
-        border: 3px solid #e8ecf0;
-        border-top-color: #0052cc;
-        border-radius: 50%;
-        animation: spin 0.8s linear infinite;
-    }
-
-    @@keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── Auth state ─────────────────────────────────────────────── */
-    .home-auth {
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        min-height: 80vh;
-        padding: 20px;
-    }
-
-    .home-auth-card {
-        background: white;
-        border-radius: 20px;
-        padding: 48px 40px;
-        text-align: center;
-        box-shadow: 0 4px 32px rgba(0,0,0,0.08);
-        max-width: 420px;
-        width: 100%;
-    }
-
-    .home-avatar {
-        font-size: 52px;
-        margin-bottom: 16px;
-    }
-
-    .home-welcome {
-        font-size: 26px;
-        font-weight: 800;
-        color: #172b4d;
-        margin: 0 0 8px;
-    }
-
-    .home-sub {
-        color: #6b778c;
-        font-size: 15px;
-        margin-bottom: 28px;
-    }
-
-    .home-auth-actions {
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
-
     /* ── Hero ───────────────────────────────────────────────────── */
     .home-hero {
         min-height: 100vh;
@@ -219,27 +140,7 @@ else
     .btn-hero-primary:hover {
         transform: translateY(-2px);
         box-shadow: 0 8px 24px rgba(0,82,204,0.45);
-    }
-
-    .btn-hero-secondary {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: #f4f5f7;
-        color: #172b4d !important;
-        font-size: 15px;
-        font-weight: 600;
-        padding: 14px 24px;
-        border-radius: 12px;
-        text-decoration: none !important;
-        border: 2px solid #e8ecf0;
-        transition: all 0.2s;
-    }
-
-    .btn-hero-secondary:hover {
-        background: #e8ecf0;
-        border-color: #c1c7d0;
-        transform: translateY(-1px);
+        color: white !important;
     }
 
     .btn-hero-ghost {
@@ -285,10 +186,7 @@ else
         box-shadow: 0 8px 24px rgba(0,0,0,0.09);
     }
 
-    .feature-icon {
-        font-size: 28px;
-        margin-bottom: 12px;
-    }
+    .feature-icon { font-size: 28px; margin-bottom: 12px; }
 
     .feature-card h3 {
         font-size: 15px;
@@ -306,28 +204,12 @@ else
 
     /* ── Mobile ─────────────────────────────────────────────────── */
     @@media (max-width: 640px) {
-        .home-auth-card { padding: 32px 20px; }
         .home-hero-inner { padding: 40px 16px 60px; }
         .home-cta { gap: 10px; }
-        .btn-hero-primary, .btn-hero-ghost, .btn-hero-secondary {
+        .btn-hero-primary, .btn-hero-ghost {
             width: 100%;
             justify-content: center;
             padding: 14px 20px;
         }
     }
 </style>
-
-@code {
-    private bool _loading = true;
-    private bool _isAuthenticated = false;
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (!firstRender) return;
-
-        var token = await LocalStorage.GetItemAsStringAsync("authToken");
-        _isAuthenticated = !string.IsNullOrWhiteSpace(token);
-        _loading = false;
-        StateHasChanged();
-    }
-}
