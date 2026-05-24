@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using KanbanApp.Application.DTOs;
 using KanbanApp.Application.Interfaces;
+using KanbanApp.Domain.Entities;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -16,12 +18,15 @@ namespace KanbanApp.Web.Controllers
         private readonly IBoardService _boardService;
         private readonly IMemoryCache _cache;
         private readonly ILogger<BoardsController> _logger;
+        private readonly UserManager<AppUser> _userManager;
 
-        public BoardsController(IBoardService boardService, IMemoryCache cache, ILogger<BoardsController> logger)
+        public BoardsController(IBoardService boardService, IMemoryCache cache,
+            ILogger<BoardsController> logger, UserManager<AppUser> userManager)
         {
             _boardService = boardService;
             _cache = cache;
             _logger = logger;
+            _userManager = userManager;
         }
 
         [HttpGet]
@@ -92,9 +97,18 @@ namespace KanbanApp.Web.Controllers
         }
         
         [HttpGet("all")]
-        [Authorize(Roles = "Admin")]
         public async Task<ActionResult<IEnumerable<BoardDto>>> GetAllBoards()
         {
+            // Direct DB role check — bypasses claim enrichment middleware issues
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (userId == null) return Unauthorized();
+
+            var user = await _userManager.FindByIdAsync(userId);
+            if (user == null) return Unauthorized();
+
+            var isAdmin = await _userManager.IsInRoleAsync(user, "Admin");
+            if (!isAdmin) return Forbid();
+
             _logger.LogInformation("Admin requested all boards");
             var boards = await _boardService.GetAllBoardsAsync();
             return Ok(boards);
