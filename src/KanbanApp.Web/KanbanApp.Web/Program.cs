@@ -151,15 +151,31 @@ using (var scope = app.Services.CreateScope())
             await roleManager.CreateAsync(new IdentityRole(role));
     }
 
-    // Default admin account — password from env variable (set ADMIN_PASSWORD in Railway)
+    // ── Admin account: create or sync password every startup ──────────────
+    // ADMIN_EMAIL / ADMIN_PASSWORD env vars are set in Railway.
+    // Any strong password works — no restrictions on special characters.
     var adminEmail    = Environment.GetEnvironmentVariable("ADMIN_EMAIL")    ?? "admin@kanban.com";
-    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Adm!n_K@nb@n_2026";
+    var adminPassword = Environment.GetEnvironmentVariable("ADMIN_PASSWORD") ?? "Admin2026Default";
+
     var admin = await userManager.FindByEmailAsync(adminEmail);
     if (admin == null)
     {
+        // First run: create admin
         admin = new AppUser { UserName = adminEmail, Email = adminEmail, DisplayName = "Admin" };
-        await userManager.CreateAsync(admin, adminPassword);
-        await userManager.AddToRoleAsync(admin, "Admin");
+        var createResult = await userManager.CreateAsync(admin, adminPassword);
+        if (createResult.Succeeded)
+            await userManager.AddToRoleAsync(admin, "Admin");
+    }
+    else
+    {
+        // Subsequent runs: always sync password from env var
+        // This fixes cases where password was set incorrectly on first deploy
+        var token = await userManager.GeneratePasswordResetTokenAsync(admin);
+        await userManager.ResetPasswordAsync(admin, token, adminPassword);
+
+        // Ensure admin role is assigned (in case it was lost)
+        if (!await userManager.IsInRoleAsync(admin, "Admin"))
+            await userManager.AddToRoleAsync(admin, "Admin");
     }
 }
 
