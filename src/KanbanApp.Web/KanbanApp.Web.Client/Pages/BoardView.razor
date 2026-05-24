@@ -8,6 +8,7 @@
 @inject Blazored.LocalStorage.ILocalStorageService LocalStorage
 @implements IAsyncDisposable
 @inject IJSRuntime JS
+@inject ToastService Toast
 
 @if (loadError != null)
 {
