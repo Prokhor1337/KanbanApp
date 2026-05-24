@@ -16,25 +16,39 @@
     <Routes />
     <script src="_framework/blazor.web.js"></script>
     <script>
-        // Update home page CTA buttons based on auth token
-        // Runs on both initial load and Blazor enhanced navigation
-        function updateHomeButtons() {
-            try {
-                var token = localStorage.getItem('authToken');
-                var loggedIn = token && token !== 'null' && token.length > 10;
-                var boards = document.getElementById('cta-boards');
-                var reg = document.getElementById('cta-register');
-                var login = document.getElementById('cta-login');
-                if (!boards) return; // not on home page
-                boards.style.display = loggedIn ? 'inline-flex' : 'none';
-                if (reg) reg.style.display = loggedIn ? 'none' : 'inline-flex';
-                if (login) login.style.display = loggedIn ? 'none' : 'inline-flex';
-            } catch (e) { }
-        }
-        // Initial load
-        document.addEventListener('DOMContentLoaded', updateHomeButtons);
-        // After every Blazor enhanced navigation
-        document.addEventListener('blazor:navigated', updateHomeButtons);
+        (function () {
+            function updateHomeButtons() {
+                try {
+                    var token = localStorage.getItem('authToken');
+                    var loggedIn = token && token !== 'null' && token.length > 10;
+                    var boards = document.getElementById('cta-boards');
+                    if (!boards) return; // not on home page
+                    var reg = document.getElementById('cta-register');
+                    var login = document.getElementById('cta-login');
+                    boards.style.display = loggedIn ? 'inline-flex' : 'none';
+                    if (reg) reg.style.display = loggedIn ? 'none' : 'inline-flex';
+                    if (login) login.style.display = loggedIn ? 'none' : 'inline-flex';
+                } catch (e) { }
+            }
+
+            // 1. Initial full page load
+            document.addEventListener('DOMContentLoaded', updateHomeButtons);
+
+            // 2. After Blazor enhanced navigation — defer to NEXT tick so DOM is ready
+            document.addEventListener('blazor:navigated', function () {
+                setTimeout(updateHomeButtons, 0);
+            });
+
+            // 3. MutationObserver backup — triggers when home page elements appear in DOM
+            var observer = new MutationObserver(function () {
+                if (document.getElementById('cta-boards')) {
+                    updateHomeButtons();
+                }
+            });
+            document.addEventListener('DOMContentLoaded', function () {
+                observer.observe(document.body, { childList: true, subtree: true });
+            });
+        })();
     </script>
 </body>
 
