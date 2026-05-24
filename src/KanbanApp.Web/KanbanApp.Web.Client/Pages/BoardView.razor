@@ -49,11 +49,25 @@ else
                 <div style="background-color: #ebecf0; border: 2px solid #d6d8e0; border-radius: 12px; width: 300px; min-width: 300px; padding: 14px 12px; display: flex; flex-direction: column; box-shadow: 0 2px 6px rgba(0,0,0,0.06);">
 
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
-                        <h5 style="margin: 0; font-weight: 600;">@column.Title</h5>
-                        <button class="btn btn-sm text-danger"
-                                style="padding: 0 4px; background: none; border: none; font-weight: bold;"
-                                @onclick="() => ShowDeleteModal(column.Id)"
-                                title="Delete list">✕</button>
+                        @if (editingColumnId == column.Id)
+                        {
+                            <div style="display: flex; gap: 4px; flex-grow: 1; margin-right: 8px;">
+                                <input @bind="editColumnTitle" class="form-control form-control-sm" autofocus />
+                                <button class="btn btn-success btn-sm" @onclick="() => SaveEditColumn(column)">✓</button>
+                                <button class="btn btn-light btn-sm" @onclick="CancelEditColumn">✕</button>
+                            </div>
+                        }
+                        else
+                        {
+                            <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
+                                <h5 style="margin: 0; font-weight: 600; cursor: pointer;" @onclick="() => StartEditColumn(column)" title="Rename list">@column.Title</h5>
+                                <button class="btn btn-sm" style="padding: 0; color: #a5adba;" @onclick="() => StartEditColumn(column)" title="Rename list">✏️</button>
+                            </div>
+                            <button class="btn btn-sm text-danger"
+                                    style="padding: 0 4px; background: none; border: none; font-weight: bold;"
+                                    @onclick="() => ShowDeleteModal(column.Id)"
+                                    title="Delete list">✕</button>
+                        }
                     </div>
 
                     <div style="flex-grow: 1; overflow-y: auto; padding-bottom: 20px; min-height: 50px;"
@@ -320,6 +334,9 @@ else
     private string editPriority = "Medium";
     private DateTime? editDueDate;
 
+    private Guid? editingColumnId;
+    private string editColumnTitle = string.Empty;
+
     // Proxy string property for reliable HTML date input binding
     private string EditDueDateString
     {
@@ -497,6 +514,45 @@ else
                 board = await ApiService.GetBoardAsync(Id);
             }
         }
+    }
+
+    // ── Edit Column ─────────────────────────────────────────────
+    private void StartEditColumn(KanbanColumnDto column)
+    {
+        editingColumnId = column.Id;
+        editColumnTitle = column.Title;
+    }
+
+    private void CancelEditColumn()
+    {
+        editingColumnId = null;
+        editColumnTitle = string.Empty;
+    }
+
+    private async Task SaveEditColumn(KanbanColumnDto column)
+    {
+        if (string.IsNullOrWhiteSpace(editColumnTitle) || editColumnTitle == column.Title)
+        {
+            CancelEditColumn();
+            return;
+        }
+
+        var success = await ApiService.UpdateColumnAsync(column.Id, new UpdateColumnDto 
+        { 
+            Title = editColumnTitle, 
+            Order = column.Order 
+        });
+
+        if (success)
+        {
+            column.Title = editColumnTitle;
+        }
+        else
+        {
+            Toast.ShowError("Failed to rename list");
+        }
+        
+        CancelEditColumn();
     }
 
     // ── Delete Column ───────────────────────────────────────────

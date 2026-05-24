@@ -119,6 +119,14 @@ namespace KanbanApp.Web.Client.Services
             return null;
         }
 
+        // PUT: Update a column (e.g. title)
+        public async Task<bool> UpdateColumnAsync(Guid columnId, UpdateColumnDto dto)
+        {
+            await SetAuthorizationHeader();
+            var response = await _httpClient.PutAsJsonAsync($"api/columns/{columnId}", dto);
+            return response.IsSuccessStatusCode;
+        }
+
         // POST: Create a new task
         public async Task<TaskItemDto?> CreateTaskAsync(CreateTaskDto dto)
         {
