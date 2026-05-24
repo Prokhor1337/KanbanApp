@@ -1,18 +1,163 @@
 @inherits LayoutComponentBase
 @using KanbanApp.Web.Client.Shared
 
-<div class="page">
-    <div class="sidebar">
-        <KanbanMenu />
-    </div>
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-        <article class="content px-4">
+<div class="layout-wrapper @(_sidebarOpen ? "sidebar-open" : "")">
+
+    <!-- Mobile top bar -->
+    <header class="mobile-topbar">
+        <button class="hamburger" @onclick="ToggleSidebar" aria-label="Menu">
+            <span></span><span></span><span></span>
+        </button>
+        <a href="" class="mobile-brand">Kanban Pro</a>
+    </header>
+
+    <!-- Backdrop (mobile only) -->
+    @if (_sidebarOpen)
+    {
+        <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
+    }
+
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <KanbanMenu OnNavigate="CloseSidebar" />
+    </aside>
+
+    <!-- Main content -->
+    <main class="main-content">
+        <article>
             @Body
         </article>
     </main>
+
 </div>
 
 <ToastContainer />
+
+<style>
+    /* ── Layout Shell ──────────────────────────────────────────────── */
+    .layout-wrapper {
+        display: flex;
+        min-height: 100vh;
+    }
+
+    /* ── Sidebar (desktop) ─────────────────────────────────────────── */
+    .sidebar {
+        width: 220px;
+        flex-shrink: 0;
+        background: linear-gradient(180deg, #0747a6 0%, #172b4d 100%);
+        min-height: 100vh;
+        position: sticky;
+        top: 0;
+        height: 100vh;
+        overflow-y: auto;
+        z-index: 100;
+    }
+
+    /* ── Main ──────────────────────────────────────────────────────── */
+    .main-content {
+        flex: 1;
+        min-width: 0;
+        overflow-x: hidden;
+    }
+
+    .main-content article {
+        min-height: 100vh;
+    }
+
+    /* ── Mobile Topbar (hidden on desktop) ─────────────────────────── */
+    .mobile-topbar {
+        display: none;
+    }
+
+    /* ── Hamburger button ──────────────────────────────────────────── */
+    .hamburger {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 8px;
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .hamburger span {
+        display: block;
+        width: 22px;
+        height: 2px;
+        background: #172b4d;
+        border-radius: 2px;
+        transition: all 0.25s ease;
+    }
+
+    .mobile-brand {
+        font-weight: 700;
+        font-size: 18px;
+        color: #172b4d !important;
+        text-decoration: none;
+        letter-spacing: -0.3px;
+    }
+
+    /* ── Backdrop ──────────────────────────────────────────────────── */
+    .sidebar-backdrop {
+        display: none;
+    }
+
+    /* ── Mobile breakpoint ─────────────────────────────────────────── */
+    @media (max-width: 768px) {
+        .layout-wrapper {
+            flex-direction: column;
+        }
+
+        /* Show mobile topbar */
+        .mobile-topbar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 16px;
+            background: white;
+            border-bottom: 1px solid #e8ecf0;
+            position: sticky;
+            top: 0;
+            z-index: 200;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        /* Sidebar becomes overlay */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: -240px;
+            width: 240px;
+            height: 100vh;
+            z-index: 300;
+            transition: left 0.28s cubic-bezier(0.4,0,0.2,1);
+            box-shadow: none;
+        }
+
+        .sidebar-open .sidebar {
+            left: 0;
+            box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+        }
+
+        /* Backdrop */
+        .sidebar-open .sidebar-backdrop {
+            display: block;
+            position: fixed;
+            inset: 0;
+            background: rgba(9,30,66,0.45);
+            z-index: 250;
+            backdrop-filter: blur(1px);
+        }
+
+        .main-content article {
+            padding: 0;
+        }
+    }
+</style>
+
+@code {
+    private bool _sidebarOpen = false;
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+    private void CloseSidebar() => _sidebarOpen = false;
+}

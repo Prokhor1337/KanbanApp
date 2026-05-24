@@ -6,81 +6,182 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Kanban Pro</a>
-    </div>
+<!-- Sidebar brand (visible on desktop, hidden on mobile — topbar shows it) -->
+<div class="sidebar-header">
+    <a class="sidebar-brand" href="">Kanban Pro</a>
 </div>
 
-<div class="nav-scrollable">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                Home
+<nav class="sidebar-nav">
+    <div class="nav-item">
+        <NavLink class="nav-link" href="" Match="NavLinkMatch.All" @onclick="HandleNav">
+            🏠 Home
+        </NavLink>
+    </div>
+
+    @if (_isAuthenticated)
+    {
+        <div class="nav-item">
+            <NavLink class="nav-link" href="boards" @onclick="HandleNav">
+                📋 My Boards
             </NavLink>
         </div>
 
-        @if (_isAuthenticated)
+        <div class="nav-item">
+            <NavLink class="nav-link" href="teams" @onclick="HandleNav">
+                👥 Teams
+            </NavLink>
+        </div>
+
+        @if (_isOnBoard)
         {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="boards">
-                    My Boards
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="teams">
-                    👥 Teams
-                </NavLink>
-            </div>
-
-            @if (_isOnBoard)
-            {
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="boards">
-                        ← All Boards
-                    </NavLink>
-                </div>
-            }
-
-            @if (_isAdmin)
-            {
-                <div class="nav-item px-3 mt-2">
-                    <NavLink class="nav-link text-warning" href="admin" style="font-weight: 500;">
-                        <span class="bi bi-shield-lock-fill-nav-menu" aria-hidden="true"></span> Admin Panel
-                    </NavLink>
-                </div>
-            }
-
-            <div class="nav-item px-3 mt-4">
-                <NavLink class="nav-link" href="profile">
-                    <span aria-hidden="true">👤</span> Profile
-                </NavLink>
-            </div>
-
-            <div class="nav-item px-3">
-                <button class="nav-link btn btn-link text-start w-100 text-muted" @onclick="Logout">
-                    Logout
-                </button>
-            </div>
-        }
-        else if (!_loading)
-        {
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="login">
-                    Log In
-                </NavLink>
-            </div>
-            <div class="nav-item px-3">
-                <NavLink class="nav-link" href="register">
-                    Register
+            <div class="nav-item">
+                <NavLink class="nav-link" href="boards" @onclick="HandleNav">
+                    ← All Boards
                 </NavLink>
             </div>
         }
-    </nav>
-</div>
+
+        @if (_isAdmin)
+        {
+            <div class="nav-section-divider"></div>
+            <div class="nav-item">
+                <NavLink class="nav-link nav-link-admin" href="admin" @onclick="HandleNav">
+                    🛡️ Admin Panel
+                </NavLink>
+            </div>
+        }
+
+        <div class="nav-spacer"></div>
+
+        <div class="nav-item">
+            <NavLink class="nav-link" href="profile" @onclick="HandleNav">
+                👤 Profile
+            </NavLink>
+        </div>
+
+        <div class="nav-item">
+            <button class="nav-link nav-link-logout" @onclick="Logout">
+                🚪 Logout
+            </button>
+        </div>
+    }
+    else if (!_loading)
+    {
+        <div class="nav-spacer"></div>
+        <div class="nav-item">
+            <NavLink class="nav-link" href="login" @onclick="HandleNav">
+                🔑 Log In
+            </NavLink>
+        </div>
+        <div class="nav-item">
+            <NavLink class="nav-link nav-link-register" href="register" @onclick="HandleNav">
+                ✨ Register
+            </NavLink>
+        </div>
+    }
+</nav>
+
+<style>
+    /* ── Sidebar Layout ────────────────────────────────────────────── */
+    .sidebar-header {
+        padding: 20px 16px 12px;
+        border-bottom: 1px solid rgba(255,255,255,0.12);
+    }
+
+    .sidebar-brand {
+        font-size: 20px;
+        font-weight: 800;
+        color: white !important;
+        text-decoration: none;
+        letter-spacing: -0.4px;
+        display: block;
+    }
+
+    .sidebar-nav {
+        display: flex;
+        flex-direction: column;
+        padding: 12px 8px;
+        height: calc(100vh - 60px);
+    }
+
+    .nav-item {
+        margin-bottom: 2px;
+    }
+
+    /* ── Nav Links ─────────────────────────────────────────────────── */
+    .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 500;
+        color: rgba(255,255,255,0.82) !important;
+        text-decoration: none;
+        transition: background 0.15s, color 0.15s;
+        width: 100%;
+        border: none;
+        background: none;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .nav-link:hover {
+        background: rgba(255,255,255,0.12);
+        color: white !important;
+    }
+
+    .nav-link.active {
+        background: rgba(255,255,255,0.18);
+        color: white !important;
+        font-weight: 600;
+    }
+
+    .nav-link-admin {
+        color: #ffc400 !important;
+    }
+
+    .nav-link-admin:hover { background: rgba(255,196,0,0.12) !important; }
+
+    .nav-link-logout {
+        color: rgba(255,100,100,0.9) !important;
+    }
+
+    .nav-link-logout:hover {
+        background: rgba(255,100,100,0.12) !important;
+        color: #ff6464 !important;
+    }
+
+    .nav-link-register {
+        background: rgba(255,255,255,0.1);
+        color: white !important;
+        font-weight: 600;
+    }
+
+    .nav-link-register:hover {
+        background: rgba(255,255,255,0.2) !important;
+    }
+
+    /* ── Utility ───────────────────────────────────────────────────── */
+    .nav-spacer { flex: 1; }
+
+    .nav-section-divider {
+        height: 1px;
+        background: rgba(255,255,255,0.1);
+        margin: 8px 4px;
+    }
+
+    /* ── Mobile: hide the sidebar brand (topbar shows it instead) ── */
+    @@media (max-width: 768px) {
+        .sidebar-header { display: none; }
+        .sidebar-nav { height: calc(100vh - 0px); padding-top: 16px; }
+    }
+</style>
 
 @code {
+    [Parameter] public EventCallback OnNavigate { get; set; }
+
     private bool _isAuthenticated = false;
     private bool _isAdmin = false;
     private bool _loading = true;
@@ -89,12 +190,12 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
-
         Nav.LocationChanged += OnLocationChanged;
         await RefreshAuthState();
     }
 
-    private async void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
+    private async void OnLocationChanged(object? sender,
+        Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e)
     {
         await RefreshAuthState();
     }
@@ -104,8 +205,7 @@
         var token = await LocalStorage.GetItemAsStringAsync("authToken");
         _isAuthenticated = !string.IsNullOrWhiteSpace(token);
         _isOnBoard = Nav.Uri.Contains("/board/");
-        
-        // Strict role check — must read from auth state provider
+
         if (_isAuthenticated)
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -120,6 +220,13 @@
         await InvokeAsync(StateHasChanged);
     }
 
+    private async Task HandleNav()
+    {
+        // Close sidebar on mobile when a link is clicked
+        if (OnNavigate.HasDelegate)
+            await OnNavigate.InvokeAsync();
+    }
+
     public void Dispose()
     {
         Nav.LocationChanged -= OnLocationChanged;
@@ -127,6 +234,7 @@
 
     private async Task Logout()
     {
+        await HandleNav();
         await AuthService.LogoutAsync();
         Nav.NavigateTo("/login", forceLoad: true);
     }
