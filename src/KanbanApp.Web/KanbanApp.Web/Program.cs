@@ -29,9 +29,24 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Host.UseSerilog();
 
 // ─── 1. Database ──────────────────────────────────────────────────────
-// Railway provides DATABASE_URL; fallback to appsettings for local dev
-var connectionString = Environment.GetEnvironmentVariable("DATABASE_URL")
-    ?? builder.Configuration.GetConnectionString("DefaultConnection");
+// Railway provides DATABASE_URL as postgresql://user:pass@host:port/db
+// Npgsql needs Host=...;Port=...;Database=... format — convert if needed
+var rawDb = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("DefaultConnection")!;
+
+var connectionString = rawDb;
+if (rawDb.StartsWith("postgresql://") || rawDb.StartsWith("postgres://"))
+{
+    var uri    = new Uri(rawDb);
+    var parts  = uri.UserInfo.Split(':', 2);
+    var user   = parts.Length > 0 ? Uri.UnescapeDataString(parts[0]) : "";
+    var pass   = parts.Length > 1 ? Uri.UnescapeDataString(parts[1]) : "";
+    var db     = uri.AbsolutePath.TrimStart('/');
+    var port   = uri.Port > 0 ? uri.Port : 5432;
+    connectionString = $"Host={uri.Host};Port={port};Database={db};" +
+                       $"Username={user};Password={pass};" +
+                       "SSL Mode=Require;Trust Server Certificate=true;";
+}
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString));
