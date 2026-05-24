@@ -203,7 +203,7 @@ else
                         </div>
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Due Date</label>
-                            <input type="date" class="form-control" @bind="editDueDate" @bind:format="yyyy-MM-dd" />
+                            <input type="date" class="form-control" @bind="EditDueDateString" />
                         </div>
                     </div>
                     <div class="modal-footer" style="border-top: 1px solid #f0f0f0;">
@@ -319,6 +319,24 @@ else
     private string editDescription = string.Empty;
     private string editPriority = "Medium";
     private DateTime? editDueDate;
+
+    // Proxy string property for reliable HTML date input binding
+    private string EditDueDateString
+    {
+        get => editDueDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+        set
+        {
+            if (DateTime.TryParse(value, out var parsedDate))
+            {
+                // Set to UTC midnight to avoid timezone shifting issues during JSON serialization
+                editDueDate = new DateTime(parsedDate.Year, parsedDate.Month, parsedDate.Day, 0, 0, 0, DateTimeKind.Utc);
+            }
+            else
+            {
+                editDueDate = null;
+            }
+        }
+    }
 
     private static string GetPriorityColor(string priority) => priority switch
     {
