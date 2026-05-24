@@ -2,9 +2,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
-# Install Blazor WebAssembly workload BEFORE restore (required for WASM)
-RUN dotnet workload install wasm-tools
-
 # Copy solution and project files for restore
 COPY KanbanApp.sln .
 COPY src/KanbanApp.Domain/KanbanApp.Domain.csproj              src/KanbanApp.Domain/
@@ -18,9 +15,11 @@ RUN dotnet restore
 # Copy all source
 COPY . .
 
-# Publish (without --no-restore so wasm tools can do their thing)
+# Publish — disable native WASM compilation (requires Emscripten/Python, not needed for standard Blazor WASM)
 RUN dotnet publish src/KanbanApp.Web/KanbanApp.Web/KanbanApp.Web.csproj \
-    -c Release -o /out
+    -c Release -o /out \
+    -p:WasmBuildNative=false \
+    -p:RunAOTCompilation=false
 
 # ─── Stage 2: Runtime ────────────────────────────────────────────────
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
