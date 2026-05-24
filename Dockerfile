@@ -2,6 +2,9 @@
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /app
 
+# Install Blazor WebAssembly workload (required for WASM publish)
+RUN dotnet workload install wasm-tools
+
 # Copy solution and restore dependencies first (better Docker layer caching)
 COPY KanbanApp.sln .
 COPY src/KanbanApp.Domain/KanbanApp.Domain.csproj              src/KanbanApp.Domain/
