@@ -1,21 +1,18 @@
 @inherits LayoutComponentBase
 @using KanbanApp.Web.Client.Shared
 
-<div class="layout-wrapper @(_sidebarOpen ? "sidebar-open" : "")">
+<div class="layout-wrapper" id="app-layout-wrapper">
 
     <!-- Mobile top bar -->
     <header class="mobile-topbar">
-        <button class="hamburger" @onclick="ToggleSidebar" aria-label="Menu">
+        <button class="hamburger" onclick="toggleMobileSidebar()" aria-label="Menu">
             <span></span><span></span><span></span>
         </button>
         <a href="" class="mobile-brand">Kanban Pro</a>
     </header>
 
     <!-- Backdrop (mobile only) -->
-    @if (_sidebarOpen)
-    {
-        <div class="sidebar-backdrop" @onclick="CloseSidebar"></div>
-    }
+    <div class="sidebar-backdrop" id="mobile-sidebar-backdrop" onclick="closeMobileSidebar()"></div>
 
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -32,6 +29,15 @@
 </div>
 
 <ToastContainer />
+
+<script>
+    function toggleMobileSidebar() {
+        document.getElementById('app-layout-wrapper').classList.toggle('sidebar-open');
+    }
+    function closeMobileSidebar() {
+        document.getElementById('app-layout-wrapper').classList.remove('sidebar-open');
+    }
+</script>
 
 <style>
     /* ── Layout Shell ──────────────────────────────────────────────── */
@@ -156,8 +162,10 @@
 </style>
 
 @code {
-    private bool _sidebarOpen = false;
-
-    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
-    private void CloseSidebar() => _sidebarOpen = false;
+    private async Task CloseSidebar()
+    {
+        try {
+            await JS.InvokeVoidAsync("closeMobileSidebar");
+        } catch { }
+    }
 }
