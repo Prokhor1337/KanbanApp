@@ -47,9 +47,29 @@ else
                     </div>
                 }
                 
-                @if (!string.IsNullOrEmpty(board.Description))
+                @if (isEditingBoardDescription)
                 {
-                    <p class="board-page-desc">@board.Description</p>
+                    <div style="display: flex; gap: 8px; align-items: flex-start; margin-bottom: 8px;">
+                        <textarea @bind="editBoardDescription" class="form-control" style="font-size: 14px; min-height: 60px; resize: vertical;" placeholder="Add a description..."></textarea>
+                        <div style="display: flex; flex-direction: column; gap: 4px;">
+                            <button class="btn btn-success btn-sm" @onclick="SaveEditBoardDescription">✓</button>
+                            <button class="btn btn-light btn-sm" @onclick="CancelEditBoardDescription">✕</button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div style="display: flex; align-items: flex-start; gap: 12px; margin-bottom: 8px; cursor: pointer; min-height: 24px;" @onclick="StartEditBoardDescription" title="Edit description">
+                        @if (string.IsNullOrWhiteSpace(board.Description))
+                        {
+                            <p class="board-page-desc" style="font-style: italic; color: #a5adba; margin-bottom: 0;">Add a description...</p>
+                        }
+                        else
+                        {
+                            <p class="board-page-desc" style="margin-bottom: 0; word-break: break-word; overflow-wrap: anywhere;">@board.Description</p>
+                        }
+                        <button class="btn btn-sm" style="padding: 0; color: #a5adba; font-size: 14px; margin-top: 2px;">✏️</button>
+                    </div>
                 }
             </div>
             <button class="btn @(isCopied ? "btn-success" : "btn-outline-primary") btn-sm share-btn"
@@ -356,6 +376,9 @@ else
     private bool isEditingBoardTitle = false;
     private string editBoardTitle = string.Empty;
 
+    private bool isEditingBoardDescription = false;
+    private string editBoardDescription = string.Empty;
+
     // Proxy string property for reliable HTML date input binding
     private string EditDueDateString
     {
@@ -572,6 +595,45 @@ else
         }
         
         CancelEditBoardTitle();
+    }
+
+    // ── Edit Board Description ────────────────────────────────────
+    private void StartEditBoardDescription()
+    {
+        isEditingBoardDescription = true;
+        editBoardDescription = board?.Description ?? string.Empty;
+    }
+
+    private void CancelEditBoardDescription()
+    {
+        isEditingBoardDescription = false;
+        editBoardDescription = string.Empty;
+    }
+
+    private async Task SaveEditBoardDescription()
+    {
+        if (board == null || editBoardDescription == (board.Description ?? string.Empty))
+        {
+            CancelEditBoardDescription();
+            return;
+        }
+
+        var success = await ApiService.UpdateBoardAsync(board.Id, new UpdateBoardDto
+        {
+            Title = board.Title,
+            Description = editBoardDescription
+        });
+
+        if (success)
+        {
+            board.Description = editBoardDescription;
+        }
+        else
+        {
+            Toast.ShowError("Failed to update board description");
+        }
+        
+        CancelEditBoardDescription();
     }
 
     // ── Edit Column ─────────────────────────────────────────────
