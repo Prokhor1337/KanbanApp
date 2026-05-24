@@ -31,7 +31,22 @@ else
     <div class="board-page">
         <div class="board-page-header">
             <div class="board-page-title-block">
-                <h2 class="board-page-title">@board.Title</h2>
+                @if (isEditingBoardTitle)
+                {
+                    <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                        <input @bind="editBoardTitle" class="form-control" style="font-size: 24px; font-weight: bold;" autofocus />
+                        <button class="btn btn-success" @onclick="SaveEditBoardTitle">✓</button>
+                        <button class="btn btn-light" @onclick="CancelEditBoardTitle">✕</button>
+                    </div>
+                }
+                else
+                {
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+                        <h2 class="board-page-title" style="margin-bottom: 0; cursor: pointer; word-break: break-word; overflow-wrap: anywhere;" @onclick="StartEditBoardTitle" title="Rename board">@board.Title</h2>
+                        <button class="btn btn-sm" style="padding: 0; color: #a5adba; font-size: 18px;" @onclick="StartEditBoardTitle" title="Rename board">✏️</button>
+                    </div>
+                }
+                
                 @if (!string.IsNullOrEmpty(board.Description))
                 {
                     <p class="board-page-desc">@board.Description</p>
@@ -61,7 +76,7 @@ else
                         else
                         {
                             <div style="display: flex; align-items: center; gap: 8px; flex-grow: 1;">
-                                <h5 style="margin: 0; font-weight: 600; cursor: pointer;" @onclick="() => StartEditColumn(column)" title="Rename list">@column.Title</h5>
+                                <h5 style="margin: 0; font-weight: 600; cursor: pointer; word-break: break-word; overflow-wrap: anywhere;" @onclick="() => StartEditColumn(column)" title="Rename list">@column.Title</h5>
                                 <button class="btn btn-sm" style="padding: 0; color: #a5adba;" @onclick="() => StartEditColumn(column)" title="Rename list">✏️</button>
                             </div>
                             <button class="btn btn-sm text-danger"
@@ -338,6 +353,9 @@ else
     private Guid? editingColumnId;
     private string editColumnTitle = string.Empty;
 
+    private bool isEditingBoardTitle = false;
+    private string editBoardTitle = string.Empty;
+
     // Proxy string property for reliable HTML date input binding
     private string EditDueDateString
     {
@@ -515,6 +533,45 @@ else
                 board = await ApiService.GetBoardAsync(Id);
             }
         }
+    }
+
+    // ── Edit Board Title ────────────────────────────────────────
+    private void StartEditBoardTitle()
+    {
+        isEditingBoardTitle = true;
+        editBoardTitle = board?.Title ?? string.Empty;
+    }
+
+    private void CancelEditBoardTitle()
+    {
+        isEditingBoardTitle = false;
+        editBoardTitle = string.Empty;
+    }
+
+    private async Task SaveEditBoardTitle()
+    {
+        if (board == null || string.IsNullOrWhiteSpace(editBoardTitle) || editBoardTitle == board.Title)
+        {
+            CancelEditBoardTitle();
+            return;
+        }
+
+        var success = await ApiService.UpdateBoardAsync(board.Id, new UpdateBoardDto
+        {
+            Title = editBoardTitle,
+            Description = board.Description
+        });
+
+        if (success)
+        {
+            board.Title = editBoardTitle;
+        }
+        else
+        {
+            Toast.ShowError("Failed to rename board");
+        }
+        
+        CancelEditBoardTitle();
     }
 
     // ── Edit Column ─────────────────────────────────────────────

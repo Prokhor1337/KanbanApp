@@ -192,6 +192,14 @@ namespace KanbanApp.Web.Client.Services
             return response.IsSuccessStatusCode;
         }
 
+        // PUT: Update a board
+        public async Task<bool> UpdateBoardAsync(Guid boardId, UpdateBoardDto dto)
+        {
+            await SetAuthorizationHeader();
+            var response = await _httpClient.PutAsJsonAsync($"api/boards/{boardId}", dto);
+            return response.IsSuccessStatusCode;
+        }
+
         // ── Teams ────────────────────────────────────────────────────
         public async Task<List<TeamDto>?> GetMyTeamsAsync()
         {
